@@ -1,0 +1,2012 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Loadout — Workout Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#14171A;
+    --surface:#1D2126;
+    --surface-alt:#262B31;
+    --surface-raised:#2C3137;
+    --border:#33383F;
+    --text:#F2F0E9;
+    --text-dim:#9AA0A6;
+    --text-faint:#5C636B;
+    --accent:#FF6A2B;
+    --accent-dim:#7A3A1E;
+    --good:#4ADE80;
+    --good-dim:#1E3A28;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;}
+  body{
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+  }
+  #app{
+    width:100%;
+    max-width:480px;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    position:relative;
+    background:
+      radial-gradient(ellipse 600px 300px at 50% -80px, rgba(255,106,43,0.08), transparent 70%),
+      var(--bg);
+  }
+  .display{font-family:'Bebas Neue',sans-serif;letter-spacing:0.02em;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+
+  header.topbar{
+    padding:22px 20px 14px;
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+  }
+  header.topbar .brand{
+    font-family:'Bebas Neue',sans-serif;
+    font-size:28px;
+    letter-spacing:0.06em;
+    color:var(--text);
+  }
+  header.topbar .brand span{color:var(--accent);}
+  header.topbar .today{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    color:var(--text-faint);
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+  }
+
+  main{
+    flex:1;
+    padding:4px 20px 100px;
+    overflow-y:auto;
+  }
+
+  .view{display:none;animation:fadein .18s ease;}
+  .view.active{display:block;}
+  @keyframes fadein{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+
+  /* ---------- cards ---------- */
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:16px;
+    margin-bottom:14px;
+  }
+  .card-title{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.1em;
+    color:var(--text-faint);
+    margin:0 0 10px;
+    font-weight:600;
+  }
+
+  /* ---------- home ---------- */
+  .hero-card{
+    background:linear-gradient(155deg, #241914 0%, var(--surface) 55%);
+    border:1px solid var(--accent-dim);
+    border-radius:16px;
+    padding:20px;
+    margin-bottom:16px;
+  }
+  .hero-eyebrow{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.12em;
+    color:var(--accent);
+    font-weight:600;
+    margin-bottom:6px;
+  }
+  .hero-routine{
+    font-family:'Bebas Neue',sans-serif;
+    font-size:38px;
+    line-height:1;
+    letter-spacing:0.01em;
+    margin-bottom:4px;
+  }
+  .hero-sub{color:var(--text-dim);font-size:13px;margin-bottom:16px;}
+  .btn{
+    appearance:none;
+    border:none;
+    border-radius:10px;
+    padding:13px 18px;
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:14px;
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    width:100%;
+  }
+  .btn-primary{background:var(--accent);color:#1A0E07;}
+  .btn-primary:active{background:#E85D1E;}
+  .btn-ghost{background:var(--surface-alt);color:var(--text);border:1px solid var(--border);}
+  .btn-ghost:active{background:var(--surface-raised);}
+  .btn-sm{padding:9px 12px;font-size:13px;width:auto;}
+  .btn-text{background:none;color:var(--accent);padding:6px 0;width:auto;font-size:13px;}
+  .btn-danger{background:none;color:#E8574B;padding:6px 0;width:auto;font-size:13px;}
+
+  .stat-row{display:flex;gap:10px;margin-bottom:14px;}
+  .stat-box{
+    flex:1;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:12px 14px;
+  }
+  .stat-num{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--text);}
+  .stat-label{font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.08em;margin-top:2px;}
+
+  .list-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:12px 0;
+    border-bottom:1px solid var(--border);
+  }
+  .list-row:last-child{border-bottom:none;}
+  .list-row-title{font-weight:600;font-size:14px;}
+  .list-row-sub{font-size:12px;color:var(--text-dim);margin-top:2px;}
+  .chip{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    color:var(--text-dim);
+    background:var(--surface-alt);
+    border:1px solid var(--border);
+    padding:3px 8px;
+    border-radius:100px;
+  }
+  .chip.pr{color:var(--good);border-color:var(--good-dim);background:var(--good-dim);}
+
+  .empty{
+    text-align:center;
+    padding:36px 10px;
+    color:var(--text-faint);
+  }
+  .empty-icon{font-size:28px;margin-bottom:8px;opacity:.5;}
+  .empty-title{color:var(--text-dim);font-weight:600;margin-bottom:4px;}
+  .empty-sub{font-size:13px;line-height:1.5;}
+
+  /* ---------- forms ---------- */
+  label.field-label{
+    display:block;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    color:var(--text-faint);
+    margin-bottom:6px;
+    font-weight:600;
+  }
+  input[type=text], input[type=number], input[type=date], select{
+    width:100%;
+    background:var(--surface-alt);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:11px 12px;
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    font-size:15px;
+    outline:none;
+  }
+  textarea.notes-textarea{
+    width:100%;
+    background:var(--surface-alt);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:10px 12px;
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+    line-height:1.4;
+    outline:none;
+    resize:vertical;
+  }
+  textarea.notes-textarea:focus{border-color:var(--accent);}
+  input:focus, select:focus{border-color:var(--accent);}
+  .field{margin-bottom:14px;}
+  .field-row{display:flex;gap:10px;}
+  .field-row .field{flex:1;}
+
+  /* ---------- routine builder ---------- */
+  .ex-row{
+    background:var(--surface-alt);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:12px;
+    margin-bottom:10px;
+  }
+  .ex-row-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;}
+  .ex-name{font-weight:600;font-size:14px;}
+  .ex-target{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);}
+  .icon-btn{
+    background:none;border:none;color:var(--text-faint);
+    font-size:16px;cursor:pointer;padding:2px 6px;line-height:1;
+  }
+  .icon-btn:active{color:var(--accent);}
+
+  /* ---------- workout logging ---------- */
+  .set-table{width:100%;border-collapse:collapse;margin-top:8px;}
+  .set-table th{
+    font-size:10px;text-transform:uppercase;letter-spacing:0.06em;
+    color:var(--text-faint);text-align:left;padding:0 6px 6px;font-weight:600;
+  }
+  .set-table td{padding:4px 6px;}
+  .set-num{
+    font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-faint);
+    width:22px;text-align:center;
+  }
+  .set-table input{padding:8px 8px;font-size:14px;text-align:center;}
+  .set-table input.prefilled-value{
+    color:var(--accent);
+    font-weight:600;
+    border-color:var(--accent-dim);
+  }
+  .set-table .rm-set{color:var(--text-faint);background:none;border:none;font-size:15px;cursor:pointer;}
+  .prefilled-hint{
+    display:flex;align-items:center;gap:6px;
+    font-size:11px;color:var(--text-faint);
+    margin:8px 2px 2px;
+  }
+  .prefilled-swatch{
+    width:8px;height:8px;border-radius:2px;background:var(--accent);flex-shrink:0;
+  }
+
+  /* plate loadout */
+  .plates-wrap{
+    display:flex;align-items:center;justify-content:center;
+    height:54px;margin-top:2px;
+  }
+  .bar-svg{width:100%;max-width:220px;height:100%;}
+
+  /* ---------- progress ---------- */
+  .chart-wrap{background:var(--surface-alt);border-radius:12px;padding:12px 8px;}
+  .pr-badge{
+    display:inline-flex;align-items:center;gap:4px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    color:var(--good);font-weight:700;
+  }
+
+  /* ---------- bottom nav ---------- */
+  nav.tabbar{
+    position:fixed;
+    bottom:0;left:50%;transform:translateX(-50%);
+    width:100%;max-width:480px;
+    background:rgba(20,23,26,0.92);
+    backdrop-filter:blur(10px);
+    border-top:1px solid var(--border);
+    display:flex;
+    padding:8px 2px calc(8px + env(safe-area-inset-bottom));
+  }
+  .tab{
+    flex:1;
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+    background:none;border:none;color:var(--text-faint);
+    padding:6px 0;cursor:pointer;font-family:'Inter',sans-serif;
+    min-width:0;
+  }
+  .tab.active{color:var(--accent);}
+  .tab svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.8;flex-shrink:0;}
+  .tab-label{font-size:9px;font-weight:600;letter-spacing:0.01em;}
+
+  .section-gap{margin-top:22px;}
+  .page-title{
+    font-family:'Bebas Neue',sans-serif;
+    font-size:26px;letter-spacing:0.02em;
+    margin:6px 0 16px;
+  }
+  a.back-link{
+    color:var(--text-dim);font-size:13px;text-decoration:none;
+    display:inline-flex;align-items:center;gap:4px;margin-bottom:10px;cursor:pointer;
+  }
+  ::selection{background:var(--accent);color:#1A0E07;}
+
+  /* ---------- completion modal ---------- */
+  .modal-overlay{
+    display:none;
+    position:fixed;inset:0;z-index:100;
+    background:rgba(10,11,13,0.72);
+    backdrop-filter:blur(3px);
+    align-items:center;justify-content:center;
+    padding:24px;
+  }
+  .modal-overlay.active{display:flex;}
+  .modal-card{
+    width:100%;max-width:340px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:18px;
+    padding:28px 24px 24px;
+    text-align:center;
+    animation:modalpop .22s cubic-bezier(.2,.9,.3,1.2);
+  }
+  @keyframes modalpop{from{opacity:0;transform:scale(.92);}to{opacity:1;transform:none;}}
+  .modal-check{
+    width:52px;height:52px;border-radius:50%;
+    background:var(--good-dim);
+    display:flex;align-items:center;justify-content:center;
+    margin:0 auto 14px;
+  }
+  .modal-check svg{width:26px;height:26px;stroke:var(--good);stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+  .modal-title{
+    font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:0.02em;
+    margin-bottom:14px;
+  }
+  .modal-joke{
+    font-size:14px;line-height:1.55;color:var(--text-dim);
+    margin:0 0 22px;
+  }
+
+  /* ---------- calendar ---------- */
+  .cal-nav{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:14px;
+  }
+  .cal-nav-btn{
+    background:var(--surface-alt);border:1px solid var(--border);color:var(--text);
+    width:32px;height:32px;border-radius:8px;font-size:16px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .cal-month-label{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:0.02em;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7, minmax(0, 1fr));gap:5px;}
+  .cal-weekday{font-size:10px;color:var(--text-faint);text-align:center;padding-bottom:6px;text-transform:uppercase;letter-spacing:0.04em;}
+  .cal-cell{
+    aspect-ratio:1/1.15;border-radius:9px;background:var(--surface-alt);
+    border:1px solid var(--border);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:3px;cursor:pointer;
+    position:relative;padding:2px;min-width:0;width:100%;
+  }
+  .cal-cell.today{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);}
+  .cal-cell.selected{background:var(--surface-raised);}
+  .cal-cell.other-month{opacity:0.28;}
+  .cal-daynum{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);}
+  .cal-tag{
+    font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.01em;
+    padding:2px 4px;border-radius:5px;color:#0E0F11;max-width:100%;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;
+  }
+  .cal-tag.rest{background:var(--surface-raised)!important;color:var(--text-faint)!important;}
+  .cal-logged-check{
+    position:absolute;top:3px;right:3px;width:13px;height:13px;
+    border-radius:50%;background:var(--good);
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 0 0 1.5px var(--surface-alt);
+  }
+  .cal-logged-check svg{width:8px;height:8px;stroke:#0E0F11;stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+  .day-detail-name{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:0.02em;margin-bottom:2px;}
+  .sched-row{
+    display:flex;align-items:center;gap:10px;padding:10px 0;
+    border-bottom:1px solid var(--border);
+  }
+  .sched-row:last-child{border-bottom:none;}
+  .sched-day-num{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-faint);
+    width:44px;flex-shrink:0;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar">
+    <div class="brand">LOAD<span>OUT</span></div>
+    <div class="today" id="todayLabel"></div>
+  </header>
+
+  <main>
+
+    <!-- ============ CALENDAR ============ -->
+    <section class="view" id="view-calendar">
+      <div class="page-title">Calendar</div>
+      <div class="card">
+        <div class="cal-nav">
+          <button class="cal-nav-btn" onclick="shiftCalMonth(-1)">‹</button>
+          <div class="cal-month-label" id="calMonthLabel"></div>
+          <button class="cal-nav-btn" onclick="shiftCalMonth(1)">›</button>
+        </div>
+        <div class="cal-grid" id="calWeekdays"></div>
+        <div class="cal-grid" id="calGrid" style="margin-top:5px;"></div>
+      </div>
+      <div class="card" id="dayDetailCard" style="display:none;"></div>
+      <button class="btn btn-ghost" onclick="showView('schedule-edit')">Edit Training Phases</button>
+      <button class="btn btn-ghost" style="margin-top:10px;" onclick="exportWorkoutsCSV()">Export Workouts (CSV)</button>
+    </section>
+
+    <!-- ============ TRAINING PHASES LIST ============ -->
+    <section class="view" id="view-schedule-edit">
+      <a class="back-link" onclick="showView('calendar')">‹ Calendar</a>
+      <div class="page-title">Training Phases</div>
+      <p style="font-size:12px;color:var(--text-dim);margin:-8px 0 16px;line-height:1.5;">
+        Each phase covers a date range and repeats its own routine rotation automatically.
+        The calendar looks up whichever phase a given day falls into.
+      </p>
+      <div class="card">
+        <div id="phasesList"></div>
+      </div>
+      <button class="btn btn-primary" onclick="openPhaseEditor()">+ New Phase</button>
+    </section>
+
+    <!-- ============ PHASE EDITOR ============ -->
+    <section class="view" id="view-phase-edit">
+      <a class="back-link" onclick="showView('schedule-edit')">‹ Training Phases</a>
+      <div class="page-title" id="phaseEditTitle">New Phase</div>
+      <div class="card">
+        <div class="field">
+          <label class="field-label">Phase Name</label>
+          <input type="text" id="phaseNameInput" placeholder="e.g. Initial Cut" />
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label">Start Date</label>
+            <input type="date" id="phaseStartInput" />
+          </div>
+          <div class="field" style="margin-bottom:0;">
+            <label class="field-label">End Date</label>
+            <input type="date" id="phaseEndInput" />
+          </div>
+        </div>
+        <p style="font-size:11px;color:var(--text-faint);margin:-8px 0 14px;">Leave end date blank if this phase is open-ended / currently ongoing.</p>
+        <label class="field-label">Rotation Type</label>
+        <select id="phaseModeInput" onchange="onPhaseModeChange()">
+          <option value="sequential">Repeating N-day cycle from start date</option>
+          <option value="weekly">Fixed weekly schedule (Sun–Sat)</option>
+        </select>
+      </div>
+      <div class="card">
+        <p class="card-title" id="phaseCycleTitle">Rotation</p>
+        <div id="phaseCycleRows"></div>
+        <button class="btn btn-ghost btn-sm" id="addPhaseDayBtn" style="margin-top:8px;" onclick="addPhaseCycleDay()">+ Add Day</button>
+      </div>
+      <button class="btn btn-primary" onclick="savePhase()">Save Phase</button>
+      <button class="btn btn-danger" id="deletePhaseBtn" style="display:block;margin:14px auto 0;" onclick="deletePhase()">Delete this phase</button>
+    </section>
+
+    <!-- ============ ROUTINES LIST ============ -->
+    <section class="view" id="view-routines">
+      <div class="page-title">Routines</div>
+      <div class="card">
+        <div id="routinesList"></div>
+      </div>
+      <button class="btn btn-primary" onclick="openRoutineEditor()">+ New Routine</button>
+    </section>
+
+    <!-- ============ ROUTINE EDITOR ============ -->
+    <section class="view" id="view-routine-edit">
+      <a class="back-link" onclick="showView('routines')">‹ Routines</a>
+      <div class="page-title" id="routineEditTitle">New Routine</div>
+      <div class="card">
+        <div class="field">
+          <label class="field-label">Routine Name</label>
+          <input type="text" id="routineNameInput" placeholder="e.g. Upper 1" />
+        </div>
+        <p class="card-title" style="margin-top:18px;">Exercises</p>
+        <div id="routineExList"></div>
+        <div class="ex-row" style="background:transparent;border-style:dashed;">
+          <div class="field">
+            <label class="field-label">Choose from library</label>
+            <select id="libraryExSelect" onchange="pickFromLibrary(this.value)">
+              <option value="">Browse by muscle group…</option>
+            </select>
+          </div>
+          <div class="field" style="margin-bottom:0;">
+            <label class="field-label">Or type your own</label>
+            <input type="text" id="newExName" placeholder="Exercise name" list="libraryDatalist" />
+            <datalist id="libraryDatalist"></datalist>
+          </div>
+          <div class="field-row" style="margin-top:8px;">
+            <div class="field" style="margin-bottom:0;">
+              <input type="text" id="newExSets" placeholder="Sets (e.g. 3)" inputmode="numeric" />
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <input type="text" id="newExReps" placeholder="Reps (e.g. 8-10)" />
+            </div>
+          </div>
+          <button class="btn btn-ghost btn-sm section-gap" style="margin-top:10px;" onclick="addExerciseToEditor()">+ Add Exercise</button>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="saveRoutine()">Save Routine</button>
+      <button class="btn btn-danger" id="deleteRoutineBtn" style="display:block;margin:14px auto 0;" onclick="deleteRoutine()">Delete this routine</button>
+    </section>
+
+    <!-- ============ LOG SESSION ============ -->
+    <section class="view" id="view-log-session">
+      <a class="back-link" onclick="showView('calendar')">‹ Calendar</a>
+      <div class="page-title" id="logSessionTitle">Session</div>
+      <div class="card">
+        <div class="field" style="margin-bottom:0;">
+          <label class="field-label">Date</label>
+          <input type="date" id="logDate" />
+        </div>
+      </div>
+      <div id="logExerciseList"></div>
+      <button class="btn btn-primary" onclick="saveWorkout()">Save Workout</button>
+    </section>
+
+    <!-- ============ PROGRESS ============ -->
+    <section class="view" id="view-progress">
+      <div class="page-title">Progress</div>
+      <div class="card">
+        <label class="field-label">Muscle Group</label>
+        <select id="progressExerciseSelect" onchange="renderProgressResults()"></select>
+      </div>
+      <div id="progressResults"></div>
+      <div class="empty" id="progressEmpty">
+        <div class="empty-icon">◐</div>
+        <div class="empty-title">No data yet</div>
+        <div class="empty-sub">Log a workout to start tracking progressive overload for each exercise.</div>
+      </div>
+    </section>
+
+  </main>
+
+  <nav class="tabbar">
+    <button class="tab" data-tab="calendar" onclick="showView('calendar')">
+      <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></svg>
+      <span class="tab-label">Calendar</span>
+    </button>
+    <button class="tab" data-tab="routines" onclick="showView('routines')">
+      <svg viewBox="0 0 24 24"><path d="M4 8h16M4 16h16"/><circle cx="8" cy="8" r="1.6"/><circle cx="16" cy="16" r="1.6"/></svg>
+      <span class="tab-label">Routines</span>
+    </button>
+    <button class="tab" data-tab="progress" onclick="showView('progress')">
+      <svg viewBox="0 0 24 24"><path d="M4 19V9M11 19V4M18 19v-6"/></svg>
+      <span class="tab-label">Progress</span>
+    </button>
+  </nav>
+
+  <div class="modal-overlay" id="completionModal">
+    <div class="modal-card">
+      <div class="modal-check">
+        <svg viewBox="0 0 24 24"><path d="M4 12l6 6L20 6"/></svg>
+      </div>
+      <div class="modal-title">Workout Complete</div>
+      <p class="modal-joke" id="modalJokeText"></p>
+      <button class="btn btn-primary" onclick="closeCompletionModal()">Nice 😄</button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="confirmModal">
+    <div class="modal-card">
+      <div class="modal-title" id="confirmModalTitle">Are you sure?</div>
+      <p class="modal-joke" id="confirmModalMessage" style="white-space:pre-line;"></p>
+      <div class="field-row" style="margin-bottom:0;">
+        <button class="btn btn-ghost" style="flex:1;" onclick="resolveConfirmModal(false)">Cancel</button>
+        <button class="btn btn-primary" style="flex:1;" onclick="resolveConfirmModal(true)">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="alertModal">
+    <div class="modal-card">
+      <div class="modal-title">Heads up</div>
+      <p class="modal-joke" id="alertModalMessage"></p>
+      <button class="btn btn-primary" onclick="closeAlertModal()">OK</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ============================================================
+   STORAGE FALLBACK
+   ============================================================
+   window.storage only exists inside Claude's artifact viewer.
+   When this file is opened as a standalone page (downloaded, hosted,
+   or opened directly in a browser), fall back to localStorage so
+   everything still saves — just scoped to that browser/device instead
+   of a Claude account. */
+if(!window.storage){
+  const PREFIX = 'loadout:';
+  window.storage = {
+    async get(key){
+      const raw = localStorage.getItem(PREFIX + key);
+      if(raw === null) throw new Error('Key not found: ' + key);
+      return {key, value: raw, shared: false};
+    },
+    async set(key, value){
+      localStorage.setItem(PREFIX + key, value);
+      return {key, value, shared: false};
+    },
+    async delete(key){
+      localStorage.removeItem(PREFIX + key);
+      return {key, deleted: true, shared: false};
+    },
+    async list(prefix){
+      const keys = Object.keys(localStorage)
+        .filter(k => k.startsWith(PREFIX + (prefix || '')))
+        .map(k => k.slice(PREFIX.length));
+      return {keys, prefix, shared: false};
+    }
+  };
+}
+
+/* ============================================================
+   STATE
+   ============================================================ */
+let routines = [];   // {id, name, exercises:[{id,name,sets,reps}]}
+let workouts = [];   // {id, date, routineId, routineName, exercises:[{exerciseId,name,sets:[{weight,reps}]}]}
+let schedule = null;  // {phases: [{id,name,startDate,endDate|null,mode:'sequential'|'weekly',cycle:[...]}]}
+let dayOverrides = {}; // {isoDate: routineName|'Rest'} — manual per-day overrides of the computed schedule
+let exerciseNotes = {}; // {exerciseName: 'free text note'}
+let editingRoutineId = null;
+let editingRoutineExercises = [];
+let activeSessionRoutine = null;
+let activeSessionExercises = []; // working copy while logging
+let calViewDate = new Date();    // month currently shown in calendar
+let calSelectedDate = null;      // ISO date string of tapped day
+let dayDetailEditing = false;    // whether the day-detail routine picker is open
+let editingPhaseId = null;
+let editingPhase = null;         // working copy while editing a phase
+
+const WEEKLY_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+// Training plan data — see planning doc. Priming Phase and the 1-week Refeed
+// reuse the same PPL routines; a short rest break sits between Priming and
+// Initial Cut; Initial Cut then runs its own upper/lower rotation.
+const DEFAULT_SCHEDULE = {
+  phases: [
+    {
+      id: 'phase-priming', name: 'Priming Phase',
+      startDate: '2026-08-18', endDate: '2026-09-14',
+      mode: 'sequential',
+      cycle: ['Push 1','Pull 1','Legs 1','Rest','Push 2','Pull 2','Legs 2','Rest']
+    },
+    {
+      id: 'phase-transition', name: 'Rest Days',
+      startDate: '2026-09-15', endDate: '2026-09-16',
+      mode: 'sequential',
+      cycle: ['Rest']
+    },
+    {
+      id: 'phase-cut', name: 'Initial Cut',
+      startDate: '2026-09-17', endDate: '2026-11-24',
+      mode: 'sequential',
+      cycle: ['Upper 1','Lower 1','Arms/Shoulders','Rest','Upper 2','Lower 2','Rest']
+    },
+    {
+      id: 'phase-refeed', name: 'Refeed Week',
+      startDate: '2026-11-25', endDate: '2026-12-01',
+      mode: 'sequential',
+      cycle: ['Push 1','Pull 1','Legs 1','Push 2','Pull 2','Legs 2']
+    }
+  ]
+};
+
+// Bump this when the built-in routine/schedule defaults change, so
+// existing saved data gets refreshed to match the latest training plan.
+const LIBRARY_VERSION = 'v7-restore-sep-transition';
+
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+/* ============================================================
+   EXERCISE LIBRARY
+   ============================================================ */
+const EXERCISE_LIBRARY = {
+  'Chest': ['Barbell Bench Press','Incline Barbell Press','Incline Dumbbell Press','Dumbbell Bench Press','Cable Fly','Chest Dip','Push-Up'],
+  'Back': ['Bent-Over Row','Seated Cable Row','Lat Pulldown','Pull-Up','Chin-Up','T-Bar Row','Single-Arm Dumbbell Row','Deadlift'],
+  'Shoulders': ['Overhead Press','Dumbbell Shoulder Press','Arnold Press','Dumbbell Lateral Raise','Front Raise','Face Pull','Upright Row'],
+  'Biceps': ['Barbell Curl','Dumbbell Curl','Hammer Curl','Preacher Curl','Cable Curl'],
+  'Triceps': ['Tricep Pushdown','Skull Crusher','Overhead Tricep Extension','Close-Grip Bench Press','Tricep Dip'],
+  'Quads': ['Back Squat','Front Squat','Leg Press','Walking Lunge','Leg Extension','Bulgarian Split Squat'],
+  'Hamstrings & Glutes': ['Romanian Deadlift','Leg Curl','Good Morning','Hip Thrust','Glute Bridge','Sumo Deadlift'],
+  'Calves': ['Standing Calf Raise','Seated Calf Raise'],
+  'Core': ['Plank','Hanging Leg Raise','Cable Crunch','Ab Wheel Rollout','Russian Twist'],
+};
+
+function populateLibraryPickers(){
+  const select = document.getElementById('libraryExSelect');
+  const datalist = document.getElementById('libraryDatalist');
+  if(!select || !datalist) return;
+  let optionsHTML = '<option value="">Browse by muscle group…</option>';
+  let datalistHTML = '';
+  Object.entries(EXERCISE_LIBRARY).forEach(([group, exercises]) => {
+    optionsHTML += `<optgroup label="${group}">` +
+      exercises.map(e => `<option value="${e}">${e}</option>`).join('') +
+      `</optgroup>`;
+    exercises.forEach(e => { datalistHTML += `<option value="${e}"></option>`; });
+  });
+  select.innerHTML = optionsHTML;
+  datalist.innerHTML = datalistHTML;
+}
+
+function pickFromLibrary(name){
+  if(!name) return;
+  document.getElementById('newExName').value = name;
+  document.getElementById('libraryExSelect').value = '';
+  document.getElementById('newExName').focus();
+}
+
+/* ---------- muscle-group classification for Progress ---------- */
+// Exact overrides for exercise names that don't already appear in
+// EXERCISE_LIBRARY (e.g. the specific training-plan exercise names).
+const EXTRA_EXERCISE_GROUPS = {
+  'Incline Smith Bench Press':'Chest', 'Pec Dec':'Chest', 'Wide Grip Bench Press':'Chest',
+  'Smith JM Press':'Triceps', 'Cable Tricep Kickback':'Triceps', 'Tricep Press Down':'Triceps',
+  'Single Arm Tricep Kickback':'Triceps', 'Skull Crusher':'Triceps',
+  'Dumbbell Shoulder Press':'Shoulders', 'Dual Delt Raise':'Shoulders', 'Cross-Body Cable Y Raise':'Shoulders',
+  'Chest Supported Y Raise':'Shoulders', 'Tri-Delt Raise':'Shoulders', 'Single Arm Reverse Pec Dec':'Shoulders',
+  'Reverse Pec Dec':'Shoulders', 'EZ Bar ROM Front Raise':'Shoulders',
+  'Neutral Grip Lat Pulldown':'Back', 'Single Arm Cable Row':'Back', 'Wide Grip Row':'Back',
+  'Chest Supported Dumbbell Lat Row':'Back',
+  'Dumbbell Preacher Hammer Curl':'Biceps', 'Face Away Cable Curl':'Biceps', 'Dumbbell Preacher Curl':'Biceps',
+  'Overhand-Underhand EZ Bar Preacher Curl':'Biceps',
+  'Pendulum Squat':'Quads', 'Hack Squat':'Quads',
+  'Hamstring Curl':'Hamstrings & Glutes', 'RDL':'Hamstrings & Glutes',
+};
+
+// Keyword fallback for anything typed freehand that isn't in either map above.
+const MUSCLE_GROUP_KEYWORDS = [
+  ['Chest', ['bench','chest','pec','fly']],
+  ['Triceps', ['tricep','skull crusher','jm press','pushdown','push-down']],
+  ['Shoulders', ['shoulder','delt','press','raise','face pull','arnold','upright row']],
+  ['Back', ['row','pulldown','pull-up','pullup','lat ','deadlift','chin-up']],
+  ['Biceps', ['curl']],
+  ['Quads', ['squat','leg press','lunge','leg extension']],
+  ['Hamstrings & Glutes', ['rdl','romanian','hamstring','glute','hip thrust','good morning']],
+  ['Calves', ['calf']],
+  ['Core', ['plank','crunch','ab wheel','russian twist','hanging leg']],
+];
+
+function buildExerciseGroupMap(){
+  const map = {};
+  Object.entries(EXERCISE_LIBRARY).forEach(([group, list]) => {
+    list.forEach(name => { map[name] = group; });
+  });
+  Object.entries(EXTRA_EXERCISE_GROUPS).forEach(([name, group]) => { map[name] = group; });
+  return map;
+}
+const EXERCISE_GROUP_MAP = buildExerciseGroupMap();
+const MUSCLE_GROUP_ORDER = [...Object.keys(EXERCISE_LIBRARY), 'Other'];
+
+function groupForExercise(name){
+  if(EXERCISE_GROUP_MAP[name]) return EXERCISE_GROUP_MAP[name];
+  const lower = name.toLowerCase();
+  for(const [group, keywords] of MUSCLE_GROUP_KEYWORDS){
+    if(keywords.some(k => lower.includes(k))) return group;
+  }
+  return 'Other';
+}
+
+/* ============================================================
+   STORAGE
+   ============================================================ */
+function buildDefaultRoutines(){
+  const mk = (name, list) => ({
+    id: uid(), name,
+    exercises: list.map(([n,s,r]) => ({id: uid(), name: n, sets: s, reps: r}))
+  });
+  return [
+    // ---- PPL routines (Priming Phase + Refeed Week) ----
+    mk('Push 1', [
+      ['Incline Smith Bench Press',4,'4-6'],
+      ['Pec Dec',2,'5-8'],
+      ['Smith JM Press',3,'6-8'],
+      ['Cable Tricep Kickback',3,'10-15'],
+      ['Dumbbell Shoulder Press',3,'6-8'],
+      ['Dual Delt Raise',3,'10/10'],
+      ['Cross-Body Cable Y Raise',3,'6-8'],
+    ]),
+    mk('Pull 1', [
+      ['Neutral Grip Lat Pulldown',3,'6-8'],
+      ['Single Arm Cable Row',3,'6-10'],
+      ['Dumbbell Preacher Hammer Curl',3,'6-8'],
+      ['Face Away Cable Curl',3,'6-8'],
+      ['Wide Grip Row',3,'5-8'],
+      ['Reverse Pec Dec',3,'6-8'],
+    ]),
+    mk('Legs 1', [
+      ['Pendulum Squat',3,'4-6'],
+      ['Leg Extension',3,'6-8'],
+      ['Hamstring Curl',3,'6-8'],
+      ['RDL',3,'8-10'],
+      ['Standing Calf Raise',3,'12'],
+    ]),
+    mk('Push 2', [
+      ['Wide Grip Bench Press',3,'8-12'],
+      ['Cable Fly',3,'8-10'],
+      ['Smith JM Press',3,'6-8'],
+      ['Cable Tricep Kickback',3,'10-15'],
+      ['EZ Bar ROM Front Raise',3,'10-12'],
+      ['Dual Delt Raise',3,'10/10'],
+      ['Chest Supported Y Raise',3,'8-10'],
+    ]),
+    mk('Pull 2', [
+      ['Chest Supported Dumbbell Lat Row',3,'6-8'],
+      ['Single Arm Cable Row',3,'6-10'],
+      ['Dumbbell Preacher Curl',3,'6-8'],
+      ['Face Away Cable Curl',3,'6-8'],
+      ['Reverse Pec Dec',3,'6-8'],
+      ['Wide Grip Row',3,'5-8'],
+    ]),
+    mk('Legs 2', [
+      ['Hack Squat',3,'4-6'],
+      ['Leg Extension',3,'6-8'],
+      ['Hamstring Curl',3,'6-8'],
+      ['RDL',3,'8-10'],
+      ['Standing Calf Raise',3,'12'],
+    ]),
+    // ---- Upper/Lower routines (Initial Cut) ----
+    mk('Upper 1', [
+      ['Incline Smith Bench Press',3,'6-8'],
+      ['Tricep Press Down',3,'8 + MYO'],
+      ['Neutral Grip Lat Pulldown',3,'6-8'],
+      ['Overhand-Underhand EZ Bar Preacher Curl',3,'6/6'],
+      ['Tri-Delt Raise',3,'10/10/10'],
+    ]),
+    mk('Lower 1', [
+      ['Leg Extension',3,'6-8'],
+      ['Pendulum Squat',2,'6-8'],
+      ['Hamstring Curl',3,'8-10'],
+      ['RDL',2,'8-10'],
+      ['Standing Calf Raise',3,'12'],
+    ]),
+    mk('Arms/Shoulders', [
+      ['Face Away Cable Curl',3,'6-8'],
+      ['Single Arm Tricep Kickback',3,'10-15'],
+      ['Dual Delt Raise',3,'10/10'],
+      ['Single Arm Reverse Pec Dec',3,'8'],
+    ]),
+    mk('Upper 2', [
+      ['Chest Supported Dumbbell Lat Row',3,'6-8'],
+      ['Overhand-Underhand EZ Bar Preacher Curl',3,'6/6'],
+      ['Cable Fly',3,'10-12'],
+      ['Skull Crusher',3,'8'],
+      ['Tri-Delt Raise',3,'10/10/10'],
+    ]),
+    mk('Lower 2', [
+      ['Pendulum Squat',3,'6-8'],
+      ['Leg Extension',2,'6-8'],
+      ['RDL',3,'8-10'],
+      ['Hamstring Curl',2,'8-10'],
+      ['Standing Calf Raise',3,'12'],
+    ]),
+  ];
+}
+
+async function loadData(){
+  try{
+    const r = await window.storage.get('routines', false);
+    routines = r ? JSON.parse(r.value) : [];
+  }catch(e){ routines = []; }
+  try{
+    const w = await window.storage.get('workouts', false);
+    workouts = w ? JSON.parse(w.value) : [];
+  }catch(e){ workouts = []; }
+  try{
+    const s = await window.storage.get('schedule', false);
+    schedule = s ? JSON.parse(s.value) : null;
+  }catch(e){ schedule = null; }
+  try{
+    const n = await window.storage.get('exercise_notes', false);
+    exerciseNotes = n ? JSON.parse(n.value) : {};
+  }catch(e){ exerciseNotes = {}; }
+  try{
+    const o = await window.storage.get('day_overrides', false);
+    dayOverrides = o ? JSON.parse(o.value) : {};
+  }catch(e){ dayOverrides = {}; }
+
+  let storedVersion = null;
+  try{
+    const v = await window.storage.get('library_version', false);
+    storedVersion = v ? v.value : null;
+  }catch(e){ storedVersion = null; }
+
+  const needsMigration = storedVersion !== LIBRARY_VERSION;
+
+  if(routines.length === 0 || needsMigration){
+    routines = buildDefaultRoutines();
+    await persistRoutines();
+  }
+  if(!schedule || needsMigration){
+    schedule = JSON.parse(JSON.stringify(DEFAULT_SCHEDULE));
+    await persistSchedule();
+  }
+  if(needsMigration){
+    // One-time cleanup: clear stray day-overrides on Aug 14-15, 2026 left
+    // over from testing the per-day "Change routine" feature, so those
+    // days revert to blank/unscheduled like the rest of early August.
+    let overridesChanged = false;
+    ['2026-08-14', '2026-08-15'].forEach(d => {
+      if(Object.prototype.hasOwnProperty.call(dayOverrides, d)){
+        delete dayOverrides[d];
+        overridesChanged = true;
+      }
+    });
+    if(overridesChanged) await persistDayOverrides();
+
+    try{ await window.storage.set('library_version', LIBRARY_VERSION, false); }
+    catch(e){ console.error('save library_version failed', e); }
+  }
+}
+
+async function persistRoutines(){
+  try{ await window.storage.set('routines', JSON.stringify(routines), false); }
+  catch(e){ console.error('save routines failed', e); }
+}
+async function persistWorkouts(){
+  try{ await window.storage.set('workouts', JSON.stringify(workouts), false); }
+  catch(e){ console.error('save workouts failed', e); }
+}
+
+function csvEscape(val){
+  const s = String(val === undefined || val === null ? '' : val);
+  if(s.includes(',') || s.includes('"') || s.includes('\n')){
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function exportWorkoutsCSV(){
+  if(workouts.length === 0){
+    showAlertModal('No workouts logged yet — nothing to export.');
+    return;
+  }
+  const rows = [['Date','Routine','Exercise','Set','Weight (lb)','Reps']];
+  const sorted = [...workouts].sort((a,b) => a.date.localeCompare(b.date));
+  sorted.forEach(w => {
+    w.exercises.forEach(ex => {
+      ex.sets.forEach((s, i) => {
+        rows.push([w.date, w.routineName, ex.name, i+1, s.weight, s.reps]);
+      });
+    });
+  });
+  const csv = rows.map(r => r.map(csvEscape).join(',')).join('\r\n');
+  const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `loadout-workouts-${todayISO()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function persistSchedule(){
+  try{ await window.storage.set('schedule', JSON.stringify(schedule), false); }
+  catch(e){ console.error('save schedule failed', e); }
+}
+async function persistDayOverrides(){
+  try{ await window.storage.set('day_overrides', JSON.stringify(dayOverrides), false); }
+  catch(e){ console.error('save day overrides failed', e); }
+}
+async function persistExerciseNotes(){
+  try{ await window.storage.set('exercise_notes', JSON.stringify(exerciseNotes), false); }
+  catch(e){ console.error('save exercise notes failed', e); }
+}
+async function saveExerciseNote(name, value){
+  exerciseNotes[name] = value;
+  await persistExerciseNotes();
+}
+function escapeHTML(str){
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function notesFieldHTML(name){
+  const val = exerciseNotes[name] || '';
+  return `
+    <div class="field" style="margin-top:10px;margin-bottom:0;">
+      <label class="field-label">Notes</label>
+      <textarea class="notes-textarea exercise-note-input" data-exname="${escapeHTML(name)}" rows="2"
+        placeholder="Form cues, how it felt, anything to remember…">${escapeHTML(val)}</textarea>
+    </div>
+  `;
+}
+
+/* ============================================================
+   NAV
+   ============================================================ */
+function showView(name){
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  const tabName = name.startsWith('routine-edit') ? 'routines'
+    : (name === 'log-session' ? 'calendar'
+    : (name === 'schedule-edit' || name === 'phase-edit' ? 'calendar' : name));
+  const tabEl = document.querySelector('.tab[data-tab="' + tabName + '"]');
+  if(tabEl) tabEl.classList.add('active');
+
+  if(name === 'routines') renderRoutinesList();
+  if(name === 'progress') renderProgressView();
+  if(name === 'calendar'){ calViewDate = new Date(); renderCalendar(); }
+  if(name === 'schedule-edit') renderPhasesList();
+}
+
+/* ============================================================
+   DATE HELPERS
+   ============================================================ */
+function fmtDate(iso){
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+}
+// Format a Date object as YYYY-MM-DD using LOCAL time components.
+// (toISOString() converts to UTC first, which rolls the date forward
+// for anyone west of UTC once it's evening — that's a bug, not a feature.)
+function toLocalISO(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function todayISO(){
+  return toLocalISO(new Date());
+}
+function daysAgo(iso){
+  const d = new Date(iso + 'T00:00:00');
+  const now = new Date();
+  now.setHours(0,0,0,0);
+  return Math.round((now - d) / 86400000);
+}
+function daysBetween(isoA, isoB){
+  const a = new Date(isoA + 'T00:00:00');
+  const b = new Date(isoB + 'T00:00:00');
+  return Math.round((a - b) / 86400000);
+}
+
+/* ============================================================
+   SCHEDULE
+   ============================================================ */
+function sundayOnOrBefore(iso){
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate() - d.getDay());
+  return toLocalISO(d);
+}
+function phaseAnchorDate(phase){
+  return phase.mode === 'weekly' ? sundayOnOrBefore(phase.startDate) : phase.startDate;
+}
+function findPhaseForDate(iso){
+  if(!schedule || !schedule.phases) return null;
+  return schedule.phases.find(p =>
+    iso >= p.startDate && (!p.endDate || iso <= p.endDate)
+  ) || null;
+}
+function getRoutineNameForDate(iso){
+  if(Object.prototype.hasOwnProperty.call(dayOverrides, iso)) return dayOverrides[iso];
+  const phase = findPhaseForDate(iso);
+  if(!phase || !phase.cycle || phase.cycle.length === 0) return null;
+  const anchor = phaseAnchorDate(phase);
+  const len = phase.cycle.length;
+  const diff = daysBetween(iso, anchor);
+  const idx = ((diff % len) + len) % len;
+  return phase.cycle[idx];
+}
+function findRoutineByName(name){
+  return routines.find(r => r.name === name) || null;
+}
+function categoryColor(name){
+  if(!name) return '#5C636B';
+  if(name === 'Rest') return '#3A3F45';
+  const first = name.split(' ')[0].split('/')[0];
+  const map = {
+    'Push':'#FF6A2B', 'Pull':'#3C82F6', 'Legs':'#4ADE80',
+    'Upper':'#FFC53D', 'Lower':'#C084FC', 'Arms':'#F472B6'
+  };
+  return map[first] || '#9AA0A6';
+}
+
+/* ============================================================
+   WORKOUT HISTORY HELPERS
+   ============================================================ */
+function daysAgoLabel(iso){
+  const n = daysAgo(iso);
+  if(n === 0) return 'today';
+  if(n === 1) return 'yesterday';
+  return n + ' days ago';
+}
+
+function computeStreak(){
+  if(workouts.length === 0) return 0;
+  // count consecutive weeks (Mon-Sun) with at least 1 workout, back from current week
+  const weekKey = (iso) => {
+    const d = new Date(iso + 'T00:00:00');
+    const day = (d.getDay() + 6) % 7; // Mon=0
+    d.setDate(d.getDate() - day);
+    return toLocalISO(d);
+  };
+  const weeksWithWorkout = new Set(workouts.map(w => weekKey(w.date)));
+  let streak = 0;
+  let cursor = new Date();
+  while(true){
+    const day = (cursor.getDay() + 6) % 7;
+    const monday = new Date(cursor);
+    monday.setDate(cursor.getDate() - day);
+    const key = toLocalISO(monday);
+    if(weeksWithWorkout.has(key)){
+      streak++;
+      cursor.setDate(cursor.getDate() - 7);
+    } else break;
+  }
+  return streak;
+}
+
+/* ============================================================
+   CALENDAR
+   ============================================================ */
+const WEEKDAY_LABELS = ['S','M','T','W','T','F','S'];
+
+function shiftCalMonth(delta){
+  calViewDate = new Date(calViewDate.getFullYear(), calViewDate.getMonth() + delta, 1);
+  renderCalendar();
+}
+
+function renderCalendar(){
+  const y = calViewDate.getFullYear();
+  const m = calViewDate.getMonth();
+  document.getElementById('calMonthLabel').textContent =
+    calViewDate.toLocaleDateString('en-US', {month:'long', year:'numeric'});
+
+  document.getElementById('calWeekdays').innerHTML =
+    WEEKDAY_LABELS.map(d => `<div class="cal-weekday">${d}</div>`).join('');
+
+  const firstOfMonth = new Date(y, m, 1);
+  const startOffset = firstOfMonth.getDay(); // 0=Sun
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const daysInPrevMonth = new Date(y, m, 0).getDate();
+  const today = todayISO();
+
+  const loggedDates = new Set(workouts.map(w => w.date));
+
+  const cells = [];
+  // leading days from previous month
+  for(let i = 0; i < startOffset; i++){
+    const dayNum = daysInPrevMonth - startOffset + i + 1;
+    cells.push({dayNum, otherMonth:true, iso:null});
+  }
+  // this month
+  for(let d = 1; d <= daysInMonth; d++){
+    const iso = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    cells.push({dayNum:d, otherMonth:false, iso});
+  }
+  // trailing days to fill final week
+  while(cells.length % 7 !== 0){
+    cells.push({dayNum: cells.length - startOffset - daysInMonth + 1, otherMonth:true, iso:null});
+  }
+
+  document.getElementById('calGrid').innerHTML = cells.map(c => {
+    if(c.otherMonth){
+      return `<div class="cal-cell other-month"><div class="cal-daynum">${c.dayNum}</div></div>`;
+    }
+    const routineName = getRoutineNameForDate(c.iso);
+    const color = categoryColor(routineName);
+    const isToday = c.iso === today;
+    const isSelected = c.iso === calSelectedDate;
+    const isLogged = loggedDates.has(c.iso);
+    const isRest = routineName === 'Rest';
+    return `
+      <div class="cal-cell ${isToday?'today':''} ${isSelected?'selected':''}" onclick="selectCalDay('${c.iso}')">
+        <div class="cal-daynum">${c.dayNum}</div>
+        ${routineName ? `<div class="cal-tag ${isRest?'rest':''}" style="${isRest?'':'background:'+color+';'}">${routineName}</div>` : ''}
+        ${isLogged ? '<div class="cal-logged-check"><svg viewBox="0 0 24 24"><path d="M4 12l6 6L20 6"/></svg></div>' : ''}
+      </div>
+    `;
+  }).join('');
+
+  if(calSelectedDate) renderDayDetail(calSelectedDate);
+}
+
+function selectCalDay(iso){
+  calSelectedDate = iso;
+  dayDetailEditing = false;
+  renderCalendar();
+}
+
+function renderDayDetail(iso){
+  const card = document.getElementById('dayDetailCard');
+  const routineName = getRoutineNameForDate(iso);
+  const isToday = iso === todayISO();
+  const loggedWorkout = workouts.find(w => w.date === iso);
+  const dateLabel = fmtDate(iso) + (isToday ? ' · Today' : '');
+  const hasOverride = Object.prototype.hasOwnProperty.call(dayOverrides, iso);
+
+  // ---- edit mode: pick a routine (or Rest) for just this day ----
+  if(dayDetailEditing){
+    card.innerHTML = `
+      <p class="card-title">${dateLabel}</p>
+      <div class="field" style="margin-bottom:10px;">
+        <label class="field-label">Routine for this day</label>
+        <select id="dayOverrideSelect">${phaseCycleOptionsHTML(routineName)}</select>
+      </div>
+      <div class="field-row" style="margin-bottom:0;">
+        <button class="btn btn-primary btn-sm" style="flex:1;" onclick="saveDayOverride('${iso}')">Save</button>
+        <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="cancelDayDetailEdit()">Cancel</button>
+      </div>
+      ${hasOverride ? `<button class="btn-text" style="margin-top:10px;" onclick="clearDayOverride('${iso}')">Reset to normal schedule</button>` : ''}
+    `;
+    card.style.display = 'block';
+    return;
+  }
+
+  const changeLinkHTML = `<a style="color:var(--accent);font-size:12px;cursor:pointer;" onclick="openDayDetailEdit()">${routineName === null ? 'Add routine ›' : 'Change routine ›'}</a>`;
+  const overrideNoteHTML = hasOverride ? `<p style="font-size:11px;color:var(--text-faint);margin:2px 0 0;">Manually set for this day</p>` : '';
+
+  if(routineName === null){
+    card.innerHTML = `
+      <div class="list-row" style="border:none;padding:0 0 4px;">
+        <p class="card-title" style="margin:0;">${dateLabel}</p>
+        ${changeLinkHTML}
+      </div>
+      <div class="day-detail-name">Not Scheduled</div>
+      <div class="hero-sub" style="margin-bottom:0;">No training phase covers this day yet. <a style="color:var(--accent);" onclick="showView('schedule-edit')">Add a phase ›</a></div>
+    `;
+    card.style.display = 'block';
+    return;
+  }
+
+  if(routineName === 'Rest'){
+    card.innerHTML = `
+      <div class="list-row" style="border:none;padding:0 0 4px;">
+        <p class="card-title" style="margin:0;">${dateLabel}</p>
+        ${changeLinkHTML}
+      </div>
+      <div class="day-detail-name">Rest Day</div>
+      <div class="hero-sub" style="margin-bottom:0;">No routine scheduled. Recovery day.</div>
+      ${overrideNoteHTML}
+    `;
+    card.style.display = 'block';
+    return;
+  }
+
+  const routine = findRoutineByName(routineName);
+  let body = '';
+  if(!routine){
+    body = `<div class="hero-sub" style="margin-bottom:0;">"${routineName}" isn't in your routine library. <a style="color:var(--accent);" onclick="showView('routines')">Edit routines ›</a></div>`;
+  } else if(loggedWorkout){
+    const totalSets = loggedWorkout.exercises.reduce((a,e)=>a+e.sets.length,0);
+    body = `
+      <div class="hero-sub">✓ Logged · ${loggedWorkout.exercises.length} exercises · ${totalSets} sets</div>
+      <button class="btn btn-ghost" onclick="startSession('${routine.id}')">Log Again</button>
+    `;
+  } else {
+    body = `
+      <div class="hero-sub">${routine.exercises.length} exercise${routine.exercises.length===1?'':'s'}: ${routine.exercises.map(e=>e.name).join(', ')}</div>
+      <button class="btn btn-primary" onclick="startSessionForDate('${routine.id}','${iso}')">Start ${routine.name}</button>
+    `;
+  }
+  card.innerHTML = `
+    <div class="list-row" style="border:none;padding:0 0 4px;">
+      <p class="card-title" style="margin:0;">${dateLabel}</p>
+      ${changeLinkHTML}
+    </div>
+    <div class="day-detail-name">${routineName}</div>
+    ${overrideNoteHTML}
+    ${body}
+  `;
+  card.style.display = 'block';
+}
+
+function openDayDetailEdit(){
+  dayDetailEditing = true;
+  renderDayDetail(calSelectedDate);
+}
+function cancelDayDetailEdit(){
+  dayDetailEditing = false;
+  renderDayDetail(calSelectedDate);
+}
+async function saveDayOverride(iso){
+  const value = document.getElementById('dayOverrideSelect').value;
+  dayOverrides[iso] = value;
+  await persistDayOverrides();
+  dayDetailEditing = false;
+  renderCalendar();
+}
+async function clearDayOverride(iso){
+  delete dayOverrides[iso];
+  await persistDayOverrides();
+  dayDetailEditing = false;
+  renderCalendar();
+}
+
+function startSessionForDate(routineId, iso){
+  startSession(routineId);
+  document.getElementById('logDate').value = iso;
+}
+
+/* ---------- training phases list ---------- */
+function renderPhasesList(){
+  const el = document.getElementById('phasesList');
+  const phases = (schedule && schedule.phases) || [];
+  if(phases.length === 0){
+    el.innerHTML = `<div class="empty"><div class="empty-icon">＋</div><div class="empty-title">No phases yet</div><div class="empty-sub">Add a phase to start auto-filling the calendar.</div></div>`;
+    return;
+  }
+  el.innerHTML = phases.map(p => {
+    const rangeLabel = fmtDate(p.startDate) + ' – ' + (p.endDate ? fmtDate(p.endDate) : 'ongoing');
+    const modeLabel = p.mode === 'weekly' ? 'Weekly (Sun–Sat)' : `${p.cycle.length}-day cycle`;
+    return `
+      <div class="list-row" style="cursor:pointer;" onclick="openPhaseEditor('${p.id}')">
+        <div>
+          <div class="list-row-title">${p.name}</div>
+          <div class="list-row-sub">${rangeLabel} · ${modeLabel}</div>
+        </div>
+        <span class="chip">Edit ›</span>
+      </div>
+    `;
+  }).join('');
+}
+
+/* ---------- individual phase editor ---------- */
+function openPhaseEditor(phaseId){
+  editingPhaseId = phaseId || null;
+  const p = phaseId ? schedule.phases.find(x => x.id === phaseId) : null;
+  editingPhase = p
+    ? JSON.parse(JSON.stringify(p))
+    : {id: uid(), name: '', startDate: todayISO(), endDate: '', mode: 'sequential', cycle: ['Rest']};
+
+  document.getElementById('phaseEditTitle').textContent = p ? 'Edit Phase' : 'New Phase';
+  document.getElementById('phaseNameInput').value = editingPhase.name;
+  document.getElementById('phaseStartInput').value = editingPhase.startDate;
+  document.getElementById('phaseEndInput').value = editingPhase.endDate || '';
+  document.getElementById('phaseModeInput').value = editingPhase.mode;
+  document.getElementById('deletePhaseBtn').style.display = p ? 'block' : 'none';
+
+  applyPhaseModeUI();
+  renderPhaseCycleRows();
+  showView('phase-edit');
+}
+
+function onPhaseModeChange(){
+  const mode = document.getElementById('phaseModeInput').value;
+  editingPhase.mode = mode;
+  if(mode === 'weekly'){
+    // weekly rotation is always exactly 7 slots: Sun..Sat
+    const old = editingPhase.cycle;
+    editingPhase.cycle = WEEKLY_LABELS.map((_, i) => old[i] || 'Rest');
+  }
+  applyPhaseModeUI();
+  renderPhaseCycleRows();
+}
+
+function applyPhaseModeUI(){
+  const mode = document.getElementById('phaseModeInput').value;
+  document.getElementById('phaseCycleTitle').textContent =
+    mode === 'weekly' ? 'Weekly Rotation (Sun–Sat)' : 'Rotation (repeats from start date)';
+  document.getElementById('addPhaseDayBtn').style.display = mode === 'weekly' ? 'none' : 'inline-flex';
+}
+
+function phaseCycleOptionsHTML(selected){
+  let html = `<option value="Rest" ${selected==='Rest'?'selected':''}>Rest Day</option>`;
+  html += routines.map(r => `<option value="${r.name}" ${selected===r.name?'selected':''}>${r.name}</option>`).join('');
+  if(selected && selected !== 'Rest' && !routines.some(r => r.name === selected)){
+    html += `<option value="${selected}" selected>${selected} (not in library)</option>`;
+  }
+  return html;
+}
+
+function renderPhaseCycleRows(){
+  const el = document.getElementById('phaseCycleRows');
+  const mode = editingPhase.mode;
+  el.innerHTML = editingPhase.cycle.map((name, i) => `
+    <div class="sched-row">
+      <div class="sched-day-num">${mode === 'weekly' ? WEEKLY_LABELS[i] : 'Day ' + (i+1)}</div>
+      <select style="flex:1;" onchange="editingPhase.cycle[${i}]=this.value">
+        ${phaseCycleOptionsHTML(name)}
+      </select>
+      ${mode === 'sequential' ? `<button class="icon-btn" onclick="removePhaseCycleDay(${i})">✕</button>` : ''}
+    </div>
+  `).join('');
+}
+
+function addPhaseCycleDay(){
+  editingPhase.cycle.push('Rest');
+  renderPhaseCycleRows();
+}
+function removePhaseCycleDay(i){
+  if(editingPhase.cycle.length <= 1) return;
+  editingPhase.cycle.splice(i, 1);
+  renderPhaseCycleRows();
+}
+
+async function savePhase(){
+  const name = document.getElementById('phaseNameInput').value.trim();
+  const startDate = document.getElementById('phaseStartInput').value;
+  const endDate = document.getElementById('phaseEndInput').value || null;
+  if(!name){ showAlertModal('Give this phase a name.'); return; }
+  if(!startDate){ showAlertModal('Pick a start date.'); return; }
+  if(endDate && endDate < startDate){ showAlertModal('End date must be after the start date.'); return; }
+
+  const finalPhase = {
+    id: editingPhase.id, name, startDate, endDate,
+    mode: editingPhase.mode, cycle: editingPhase.cycle
+  };
+
+  if(!schedule.phases) schedule.phases = [];
+  const idx = schedule.phases.findIndex(p => p.id === editingPhase.id);
+  if(idx >= 0) schedule.phases[idx] = finalPhase;
+  else schedule.phases.push(finalPhase);
+
+  // keep phases sorted by start date so the list reads chronologically
+  schedule.phases.sort((a,b) => a.startDate.localeCompare(b.startDate));
+
+  await persistSchedule();
+  showView('schedule-edit');
+}
+
+async function deletePhase(){
+  if(!editingPhaseId) return;
+  const ok = await showConfirmModal('Its date range will become unscheduled.', 'Delete this training phase?');
+  if(!ok) return;
+  schedule.phases = schedule.phases.filter(p => p.id !== editingPhaseId);
+  await persistSchedule();
+  showView('schedule-edit');
+}
+
+/* ============================================================
+   ROUTINES LIST
+   ============================================================ */
+function renderRoutinesList(){
+  const el = document.getElementById('routinesList');
+  if(routines.length === 0){
+    el.innerHTML = `<div class="empty"><div class="empty-icon">＋</div><div class="empty-title">No routines yet</div><div class="empty-sub">Create "Upper 1", "Upper 2", or whatever split you're running.</div></div>`;
+    return;
+  }
+  el.innerHTML = routines.map(r => `
+    <div class="list-row" style="cursor:pointer;" onclick="openRoutineEditor('${r.id}')">
+      <div>
+        <div class="list-row-title">${r.name}</div>
+        <div class="list-row-sub">${r.exercises.length} exercise${r.exercises.length===1?'':'s'}</div>
+      </div>
+      <span class="chip">Edit ›</span>
+    </div>
+  `).join('');
+}
+
+/* ============================================================
+   ROUTINE EDITOR
+   ============================================================ */
+function openRoutineEditor(routineId){
+  editingRoutineId = routineId || null;
+  const r = routines.find(x => x.id === routineId);
+  editingRoutineExercises = r ? JSON.parse(JSON.stringify(r.exercises)) : [];
+  document.getElementById('routineEditTitle').textContent = r ? 'Edit Routine' : 'New Routine';
+  document.getElementById('routineNameInput').value = r ? r.name : '';
+  document.getElementById('deleteRoutineBtn').style.display = r ? 'block' : 'none';
+  document.getElementById('newExName').value = '';
+  document.getElementById('newExSets').value = '';
+  document.getElementById('newExReps').value = '';
+  populateLibraryPickers();
+  renderRoutineExList();
+  showView('routine-edit');
+}
+
+function renderRoutineExList(){
+  const el = document.getElementById('routineExList');
+  if(editingRoutineExercises.length === 0){
+    el.innerHTML = `<p style="color:var(--text-faint);font-size:13px;margin:0 0 12px;">No exercises added yet.</p>`;
+    return;
+  }
+  el.innerHTML = editingRoutineExercises.map((ex, i) => `
+    <div class="ex-row">
+      <div class="ex-row-top">
+        <div class="ex-name">${ex.name}</div>
+        <button class="icon-btn" onclick="removeExerciseFromEditor(${i})">✕</button>
+      </div>
+      <div class="field-row">
+        <div class="field" style="margin-bottom:0;">
+          <label class="field-label">Sets</label>
+          <input type="text" inputmode="numeric" value="${ex.sets}"
+            onchange="updateEditorExercise(${i},'sets',this.value)" />
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label class="field-label">Reps</label>
+          <input type="text" value="${ex.reps}"
+            onchange="updateEditorExercise(${i},'reps',this.value)" />
+        </div>
+      </div>
+      ${notesFieldHTML(ex.name)}
+    </div>
+  `).join('');
+}
+
+function updateEditorExercise(i, field, value){
+  if(field === 'sets'){
+    const n = parseInt(value);
+    editingRoutineExercises[i].sets = (n && n > 0) ? n : editingRoutineExercises[i].sets;
+  } else {
+    editingRoutineExercises[i].reps = value.trim() || editingRoutineExercises[i].reps;
+  }
+}
+
+function addExerciseToEditor(){
+  const name = document.getElementById('newExName').value.trim();
+  const sets = document.getElementById('newExSets').value.trim() || '3';
+  const reps = document.getElementById('newExReps').value.trim() || '8-10';
+  if(!name) return;
+  editingRoutineExercises.push({id: uid(), name, sets: parseInt(sets) || 3, reps});
+  document.getElementById('newExName').value = '';
+  document.getElementById('newExSets').value = '';
+  document.getElementById('newExReps').value = '';
+  renderRoutineExList();
+}
+
+function removeExerciseFromEditor(i){
+  editingRoutineExercises.splice(i, 1);
+  renderRoutineExList();
+}
+
+async function saveRoutine(){
+  const name = document.getElementById('routineNameInput').value.trim();
+  if(!name){ showAlertModal('Give this routine a name.'); return; }
+  if(editingRoutineExercises.length === 0){ showAlertModal('Add at least one exercise.'); return; }
+
+  if(editingRoutineId){
+    const r = routines.find(x => x.id === editingRoutineId);
+    r.name = name;
+    r.exercises = editingRoutineExercises;
+  } else {
+    routines.push({id: uid(), name, exercises: editingRoutineExercises});
+  }
+  await persistRoutines();
+  showView('routines');
+}
+
+async function deleteRoutine(){
+  if(!editingRoutineId) return;
+  const ok = await showConfirmModal('Past logged workouts will be kept.', 'Delete this routine?');
+  if(!ok) return;
+  routines = routines.filter(x => x.id !== editingRoutineId);
+  await persistRoutines();
+  showView('routines');
+}
+
+/* ============================================================
+   LOG SESSION
+   ============================================================ */
+function lastLoggedSetsFor(exerciseName){
+  // find most recent workout containing an exercise with this name, return its sets
+  const sorted = [...workouts].sort((a,b) => b.date.localeCompare(a.date));
+  for(const w of sorted){
+    const match = w.exercises.find(e => e.name === exerciseName);
+    if(match) return match.sets;
+  }
+  return null;
+}
+
+function bestSetFor(exerciseName){
+  // heaviest weight ever logged for this exercise
+  let best = null;
+  for(const w of workouts){
+    const match = w.exercises.find(e => e.name === exerciseName);
+    if(!match) continue;
+    for(const s of match.sets){
+      if(!best || s.weight > best.weight) best = s;
+    }
+  }
+  return best;
+}
+
+function startSession(routineId){
+  const r = routines.find(x => x.id === routineId);
+  if(!r) return;
+  activeSessionRoutine = r;
+  document.getElementById('logSessionTitle').textContent = r.name;
+  document.getElementById('logDate').value = todayISO();
+
+  activeSessionExercises = r.exercises.map(ex => {
+    const prev = lastLoggedSetsFor(ex.name);
+    const setCount = ex.sets || 3;
+    const sets = [];
+    for(let i = 0; i < setCount; i++){
+      if(prev && prev[i]){
+        sets.push({weight: prev[i].weight, reps: prev[i].reps, prefilled: true});
+      } else if(prev && prev.length > 0){
+        sets.push({weight: prev[prev.length-1].weight, reps: prev[prev.length-1].reps, prefilled: true});
+      } else {
+        sets.push({weight: '', reps: '', prefilled: false});
+      }
+    }
+    return {exerciseId: ex.id, name: ex.name, targetReps: ex.reps, sets};
+  });
+
+  renderLogExercises();
+  showView('log-session');
+}
+
+function plateBarSVG(weightPerSide){
+  // standard plates available (lb)
+  const plateColors = {45:'#E8574B', 35:'#3C82F6', 25:'#FFC53D', 10:'#4ADE80', 5:'#D8DCE1', 2.5:'#9AA0A6'};
+  const sizes = {45:44, 35:38, 25:34, 10:28, 5:22, 2.5:16};
+  const avail = [45,35,25,10,5,2.5];
+  let remaining = Math.max(0, weightPerSide);
+  const used = [];
+  for(const p of avail){
+    while(remaining + 0.01 >= p && used.length < 8){
+      used.push(p);
+      remaining -= p;
+    }
+  }
+  const barY = 27, barH = 4, cx = 110;
+  let plateEls = '';
+  let offset = 14;
+  used.forEach(p => {
+    const h = sizes[p];
+    plateEls += `<rect x="${cx + offset}" y="${barY + barH/2 - h/2}" width="7" height="${h}" rx="2" fill="${plateColors[p]}"/>`;
+    plateEls += `<rect x="${cx - offset - 7}" y="${barY + barH/2 - h/2}" width="7" height="${h}" rx="2" fill="${plateColors[p]}"/>`;
+    offset += 9;
+  });
+  return `
+    <svg class="bar-svg" viewBox="0 0 220 54" xmlns="http://www.w3.org/2000/svg">
+      <rect x="4" y="${barY}" width="212" height="${barH}" rx="2" fill="#4A5058"/>
+      ${plateEls}
+    </svg>
+  `;
+}
+
+function renderLogExercises(){
+  const el = document.getElementById('logExerciseList');
+  el.innerHTML = activeSessionExercises.map((ex, exIdx) => {
+    const anyPrefilled = ex.sets.some(s => s.prefilled);
+    const rows = ex.sets.map((s, setIdx) => `
+      <tr>
+        <td class="set-num">${setIdx+1}</td>
+        <td><input type="number" inputmode="decimal" step="2.5" min="0" placeholder="lb" value="${s.weight}"
+             class="${s.prefilled ? 'prefilled-value' : ''}"
+             oninput="updateSet(${exIdx},${setIdx},'weight',this.value,this)" /></td>
+        <td><input type="number" inputmode="numeric" min="0" placeholder="reps" value="${s.reps}"
+             class="${s.prefilled ? 'prefilled-value' : ''}"
+             oninput="updateSet(${exIdx},${setIdx},'reps',this.value,this)" /></td>
+        <td><button class="rm-set" onclick="removeSet(${exIdx},${setIdx})">✕</button></td>
+      </tr>
+    `).join('');
+
+    const maxW = Math.max(0, ...ex.sets.map(s => parseFloat(s.weight) || 0));
+    const perSide = maxW > 45 ? (maxW - 45) / 2 : 0;
+
+    return `
+      <div class="card">
+        <div class="list-row" style="border:none;padding:0 0 8px;">
+          <div>
+            <div class="list-row-title">${ex.name}</div>
+            <div class="list-row-sub">Target: ${ex.targetReps} reps</div>
+          </div>
+        </div>
+        <div class="plates-wrap">${plateBarSVG(perSide)}</div>
+        ${anyPrefilled ? '<p class="prefilled-hint"><span class="prefilled-swatch"></span>Orange = last time — edit to log today\'s numbers</p>' : ''}
+        <table class="set-table">
+          <tr><th>Set</th><th>Weight (lb)</th><th>Reps</th><th></th></tr>
+          ${rows}
+        </table>
+        <button class="btn-text" onclick="addSet(${exIdx})">+ Add set</button>
+        ${notesFieldHTML(ex.name)}
+      </div>
+    `;
+  }).join('');
+}
+
+function updateSet(exIdx, setIdx, field, value, inputEl){
+  let parsed = value === '' ? '' : parseFloat(value);
+  if(parsed !== '' && (isNaN(parsed) || parsed < 0)){
+    parsed = 0;
+    if(inputEl) inputEl.value = 0;
+  }
+  activeSessionExercises[exIdx].sets[setIdx][field] = parsed;
+  activeSessionExercises[exIdx].sets[setIdx].prefilled = false;
+  if(inputEl) inputEl.classList.remove('prefilled-value');
+  // live-update plate visual without full re-render of inputs (avoid losing focus)
+  const maxW = Math.max(0, ...activeSessionExercises[exIdx].sets.map(s => parseFloat(s.weight) || 0));
+  const perSide = maxW > 45 ? (maxW - 45) / 2 : 0;
+  const cards = document.querySelectorAll('#logExerciseList .card');
+  const wrap = cards[exIdx].querySelector('.plates-wrap');
+  if(wrap) wrap.innerHTML = plateBarSVG(perSide);
+}
+
+function addSet(exIdx){
+  const sets = activeSessionExercises[exIdx].sets;
+  const last = sets[sets.length-1];
+  sets.push({weight: last ? last.weight : '', reps: last ? last.reps : '', prefilled: false});
+  renderLogExercises();
+}
+function removeSet(exIdx, setIdx){
+  activeSessionExercises[exIdx].sets.splice(setIdx,1);
+  renderLogExercises();
+}
+
+async function saveWorkout(){
+  const date = document.getElementById('logDate').value || todayISO();
+  const exercises = activeSessionExercises
+    .map(ex => ({
+      exerciseId: ex.exerciseId,
+      name: ex.name,
+      sets: ex.sets
+        .filter(s => s.weight !== '' && s.reps !== '')
+        .map(s => {
+          const weight = parseFloat(s.weight);
+          const reps = parseInt(s.reps);
+          return {
+            weight: (isNaN(weight) || weight < 0) ? 0 : weight,
+            reps: (isNaN(reps) || reps < 0) ? 0 : reps
+          };
+        })
+    }))
+    .filter(ex => ex.sets.length > 0);
+
+  if(exercises.length === 0){ showAlertModal('Log at least one set before saving.'); return; }
+
+  workouts.push({
+    id: uid(),
+    date,
+    routineId: activeSessionRoutine.id,
+    routineName: activeSessionRoutine.name,
+    exercises
+  });
+  await persistWorkouts();
+  calSelectedDate = date;
+  showCompletionModal();
+}
+
+/* ---------- completion modal ---------- */
+const DAD_JOKES = [
+  "Why don't skeletons fight each other? They don't have the guts.",
+  "I used to be a baker, but I couldn't make enough dough.",
+  "Why did the scarecrow win an award? He was outstanding in his field.",
+  "What do you call a fish with no eyes? A fsh.",
+  "I'm reading a book about anti-gravity. It's impossible to put down.",
+  "Why don't eggs tell jokes? They'd crack each other up.",
+  "What do you call a bear with no teeth? A gummy bear.",
+  "I told my wife she should embrace her mistakes. She gave me a hug.",
+  "Why don't scientists trust atoms? Because they make up everything.",
+  "What did the ocean say to the beach? Nothing, it just waved.",
+  "Why did the bicycle fall over? Because it was two-tired.",
+  "I only know 25 letters of the alphabet. I don't know y.",
+  "What do you call cheese that isn't yours? Nacho cheese.",
+  "How do you organize a space party? You planet.",
+  "Why did the golfer bring two pairs of pants? In case he got a hole in one.",
+  "What's orange and sounds like a parrot? A carrot.",
+  "Why can't you give Elsa a balloon? Because she'll let it go.",
+  "I would tell you a chemistry joke, but I know I wouldn't get a reaction.",
+  "What do you call a factory that makes okay products? A satisfactory.",
+  "Why did the coffee file a police report? It got mugged.",
+  "What do you call a dinosaur that crashes his car? Tyrannosaurus wrecks.",
+  "I used to hate facial hair, but then it grew on me.",
+  "Why did the protein shake apply for a loan? It wanted to gain some interest.",
+  "Why don't skeletons ever skip leg day? They've got a lot of bones to pick with gravity.",
+  "Why did the treadmill get a promotion? It always went the extra mile.",
+];
+
+function showCompletionModal(){
+  const joke = DAD_JOKES[Math.floor(Math.random() * DAD_JOKES.length)];
+  document.getElementById('modalJokeText').textContent = joke;
+  document.getElementById('completionModal').classList.add('active');
+}
+
+function closeCompletionModal(){
+  document.getElementById('completionModal').classList.remove('active');
+  showView('calendar');
+}
+
+/* ---------- generic confirm / alert modals ----------
+   Native confirm()/alert() are blocked in the sandboxed artifact
+   preview, so every "are you sure?" and validation message routes
+   through these instead. */
+let confirmModalResolver = null;
+function showConfirmModal(message, title){
+  return new Promise((resolve) => {
+    confirmModalResolver = resolve;
+    document.getElementById('confirmModalTitle').textContent = title || 'Are you sure?';
+    document.getElementById('confirmModalMessage').textContent = message;
+    document.getElementById('confirmModal').classList.add('active');
+  });
+}
+function resolveConfirmModal(result){
+  document.getElementById('confirmModal').classList.remove('active');
+  if(confirmModalResolver) confirmModalResolver(result);
+  confirmModalResolver = null;
+}
+function showAlertModal(message){
+  document.getElementById('alertModalMessage').textContent = message;
+  document.getElementById('alertModal').classList.add('active');
+}
+function closeAlertModal(){
+  document.getElementById('alertModal').classList.remove('active');
+}
+
+function countPRsInWorkout(workout){
+  let count = 0;
+  const priorWorkouts = workouts.filter(w => w.date < workout.date || (w.date === workout.date && w.id !== workout.id));
+  for(const ex of workout.exercises){
+    let priorMax = 0;
+    for(const w of priorWorkouts){
+      const match = w.exercises.find(e => e.name === ex.name);
+      if(match) for(const s of match.sets) priorMax = Math.max(priorMax, s.weight);
+    }
+    const thisMax = Math.max(0, ...ex.sets.map(s => s.weight));
+    if(thisMax > priorMax && thisMax > 0) count++;
+  }
+  return count;
+}
+
+/* ============================================================
+   PROGRESS
+   ============================================================ */
+function allExerciseNames(){
+  const names = new Set();
+  routines.forEach(r => r.exercises.forEach(e => names.add(e.name)));
+  workouts.forEach(w => w.exercises.forEach(e => names.add(e.name)));
+  return [...names].sort();
+}
+
+function fmtDateShort(iso){
+  const d = new Date(iso + 'T00:00:00');
+  return (d.getMonth()+1) + '/' + d.getDate();
+}
+
+function buildGroupedExerciseOptions(){
+  const names = allExerciseNames();
+  if(names.length === 0) return null;
+  const byGroup = {};
+  names.forEach(n => {
+    const g = groupForExercise(n);
+    (byGroup[g] = byGroup[g] || []).push(n);
+  });
+  const orderedGroups = MUSCLE_GROUP_ORDER.filter(g => byGroup[g] && byGroup[g].length);
+  if(orderedGroups.length === 0) return null;
+  return orderedGroups.map(g => `<option value="group:${g}">${g}</option>`).join('');
+}
+
+function renderProgressView(){
+  const select = document.getElementById('progressExerciseSelect');
+  const optionsHTML = buildGroupedExerciseOptions();
+  if(!optionsHTML){
+    document.getElementById('progressResults').innerHTML = '';
+    document.getElementById('progressEmpty').style.display = 'block';
+    select.innerHTML = '';
+    return;
+  }
+  document.getElementById('progressEmpty').style.display = 'none';
+  const prevVal = select.value;
+  select.innerHTML = optionsHTML;
+  const stillValid = [...select.options].some(o => o.value === prevVal);
+  select.value = stillValid ? prevVal : select.options[0].value;
+  renderProgressResults();
+}
+
+function computeExercisePoints(name){
+  const points = [];
+  workouts
+    .filter(w => w.exercises.some(e => e.name === name))
+    .sort((a,b) => a.date.localeCompare(b.date))
+    .forEach(w => {
+      const ex = w.exercises.find(e => e.name === name);
+      const maxW = Math.max(...ex.sets.map(s => s.weight));
+      points.push({date: w.date, weight: maxW, routine: w.routineName});
+    });
+  return points;
+}
+
+function buildChartSVGMarkup(points, gradId){
+  const w = 320, h = 178;
+  const padL = 34, padR = 10, padT = 12, padB = 22;
+  const plotW = w - padL - padR;
+  const plotH = h - padT - padB;
+
+  const weights = points.map(p => p.weight);
+  const minW = Math.min(...weights), maxW = Math.max(...weights);
+  const range = (maxW - minW) || 10;
+  const yFor = (val) => padT + plotH - ((val - minW) / range) * plotH;
+  const xStep = points.length > 1 ? plotW / (points.length - 1) : 0;
+  const coords = points.map((p,i) => ({x: padL + i*xStep, y: yFor(p.weight), ...p}));
+
+  const pathD = coords.map((c,i) => (i===0?'M':'L') + c.x.toFixed(1) + ',' + c.y.toFixed(1)).join(' ');
+  const areaD = pathD + ` L${coords[coords.length-1].x.toFixed(1)},${padT+plotH} L${coords[0].x.toFixed(1)},${padT+plotH} Z`;
+
+  let priorMax = -Infinity;
+  const dots = coords.map(c => {
+    const isPR = c.weight > priorMax;
+    if(c.weight > priorMax) priorMax = c.weight;
+    return `<circle cx="${c.x}" cy="${c.y}" r="${isPR?4.2:2.8}" fill="${isPR?'#4ADE80':'#FF6A2B'}" stroke="${isPR?'#14171A':'none'}" stroke-width="1.3"/>`;
+  }).join('');
+
+  // y-axis: weight (lb)
+  const yAxisHTML = `
+    <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT+plotH}" stroke="#33383F" stroke-width="1"/>
+    <line x1="${padL}" y1="${padT+plotH}" x2="${w-padR}" y2="${padT+plotH}" stroke="#33383F" stroke-width="1"/>
+    <text x="${padL-5}" y="${yFor(maxW)+3}" text-anchor="end" font-size="8" fill="#5C636B" font-family="'JetBrains Mono',monospace">${maxW}</text>
+    <text x="${padL-5}" y="${yFor(minW)+3}" text-anchor="end" font-size="8" fill="#5C636B" font-family="'JetBrains Mono',monospace">${minW}</text>
+  `;
+
+  // x-axis: date labels (first, middle, last)
+  const labelIdxs = [...new Set(
+    points.length <= 2 ? [0, points.length-1] : [0, Math.floor((points.length-1)/2), points.length-1]
+  )];
+  const xAxisHTML = labelIdxs.map(i => {
+    const c = coords[i];
+    return `<text x="${c.x}" y="${h-6}" text-anchor="middle" font-size="8" fill="#5C636B" font-family="'JetBrains Mono',monospace">${fmtDateShort(c.date)}</text>`;
+  }).join('');
+
+  return `
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px;">
+      <defs>
+        <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#FF6A2B" stop-opacity="0.28"/>
+          <stop offset="100%" stop-color="#FF6A2B" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      ${yAxisHTML}
+      <path d="${areaD}" fill="url(#${gradId})" stroke="none"/>
+      <path d="${pathD}" fill="none" stroke="#FF6A2B" stroke-width="2"/>
+      ${dots}
+      ${xAxisHTML}
+    </svg>
+  `;
+}
+
+function renderExerciseCardHTML(name){
+  const points = computeExercisePoints(name);
+  if(points.length === 0) return '';
+
+  const delta = points[points.length-1].weight - points[0].weight;
+  const gradId = 'grad-' + uid();
+  const chartSVG = buildChartSVGMarkup(points, gradId);
+
+  let runningMax = -Infinity;
+  const withPR = points.map(p => {
+    const isPR = p.weight > runningMax;
+    if(p.weight > runningMax) runningMax = p.weight;
+    return {...p, isPR};
+  }).reverse();
+
+  const sessionRows = withPR.slice(0,5).map(p => `
+    <div class="list-row">
+      <div>
+        <div class="list-row-title mono">${p.weight} lb</div>
+        <div class="list-row-sub">${fmtDate(p.date)} · ${p.routine}</div>
+      </div>
+      ${p.isPR ? '<span class="pr-badge">★ PR</span>' : ''}
+    </div>
+  `).join('');
+
+  return `
+    <div class="card">
+      <p class="card-title">${name}</p>
+      <p style="font-size:12px;color:var(--text-dim);margin:-6px 0 10px;">${points.length} session${points.length>1?'s':''} logged · ${delta>=0?'+':''}${delta} lb since first</p>
+      <div class="chart-wrap">${chartSVG}</div>
+      <div class="section-gap">${sessionRows}</div>
+    </div>
+  `;
+}
+
+function renderProgressResults(){
+  const val = document.getElementById('progressExerciseSelect').value;
+  const container = document.getElementById('progressResults');
+  if(!val){ container.innerHTML = ''; return; }
+
+  const groupName = val.slice(6); // strip "group:" prefix
+  const namesInGroup = allExerciseNames().filter(n => groupForExercise(n) === groupName).sort();
+  const cardsHTML = namesInGroup.map(renderExerciseCardHTML).filter(Boolean).join('');
+  container.innerHTML = cardsHTML || `
+    <div class="empty">
+      <div class="empty-icon">◐</div>
+      <div class="empty-title">No data yet for ${groupName}</div>
+      <div class="empty-sub">Log a workout with one of these exercises to see progress here.</div>
+    </div>
+  `;
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+document.addEventListener('focusout', (e) => {
+  if(e.target && e.target.classList && e.target.classList.contains('exercise-note-input')){
+    const name = e.target.getAttribute('data-exname');
+    if(name) saveExerciseNote(name, e.target.value);
+  }
+});
+
+async function init(){
+  document.getElementById('todayLabel').textContent = new Date().toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+  await loadData();
+  calSelectedDate = todayISO();
+  showView('calendar');
+}
+init();
+</script>
+</body>
+</html>
