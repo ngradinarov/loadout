@@ -28,6 +28,7 @@
   html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;}
   body{
     min-height:100vh;
+    min-height:100dvh;
     display:flex;
     justify-content:center;
   }
@@ -35,6 +36,7 @@
     width:100%;
     max-width:480px;
     min-height:100vh;
+    min-height:100dvh;
     display:flex;
     flex-direction:column;
     position:relative;
@@ -293,6 +295,7 @@
     bottom:0;left:50%;transform:translateX(-50%);
     width:100%;max-width:480px;
     background:rgba(20,23,26,0.92);
+    -webkit-backdrop-filter:blur(10px);
     backdrop-filter:blur(10px);
     border-top:1px solid var(--border);
     display:flex;
@@ -326,6 +329,7 @@
     display:none;
     position:fixed;inset:0;z-index:100;
     background:rgba(10,11,13,0.72);
+    -webkit-backdrop-filter:blur(3px);
     backdrop-filter:blur(3px);
     align-items:center;justify-content:center;
     padding:24px;
@@ -702,7 +706,7 @@ const LIBRARY_VERSION = 'v7-restore-sep-transition';
 // Shown in the header so you can confirm both phones are on the same
 // build after re-uploading a new index.html. Bump on any real update —
 // this is purely cosmetic and never triggers a data migration.
-const APP_VERSION = 'v1.9';
+const APP_VERSION = 'v2.1';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -1058,12 +1062,6 @@ function toLocalISO(d){
 function todayISO(){
   return toLocalISO(new Date());
 }
-function daysAgo(iso){
-  const d = new Date(iso + 'T00:00:00');
-  const now = new Date();
-  now.setHours(0,0,0,0);
-  return Math.round((now - d) / 86400000);
-}
 function daysBetween(isoA, isoB){
   const a = new Date(isoA + 'T00:00:00');
   const b = new Date(isoB + 'T00:00:00');
@@ -1109,41 +1107,6 @@ function categoryColor(name){
     'Upper':'#FFC53D', 'Lower':'#C084FC', 'Arms':'#F472B6'
   };
   return map[first] || '#9AA0A6';
-}
-
-/* ============================================================
-   WORKOUT HISTORY HELPERS
-   ============================================================ */
-function daysAgoLabel(iso){
-  const n = daysAgo(iso);
-  if(n === 0) return 'today';
-  if(n === 1) return 'yesterday';
-  return n + ' days ago';
-}
-
-function computeStreak(){
-  if(workouts.length === 0) return 0;
-  // count consecutive weeks (Mon-Sun) with at least 1 workout, back from current week
-  const weekKey = (iso) => {
-    const d = new Date(iso + 'T00:00:00');
-    const day = (d.getDay() + 6) % 7; // Mon=0
-    d.setDate(d.getDate() - day);
-    return toLocalISO(d);
-  };
-  const weeksWithWorkout = new Set(workouts.map(w => weekKey(w.date)));
-  let streak = 0;
-  let cursor = new Date();
-  while(true){
-    const day = (cursor.getDay() + 6) % 7;
-    const monday = new Date(cursor);
-    monday.setDate(cursor.getDate() - day);
-    const key = toLocalISO(monday);
-    if(weeksWithWorkout.has(key)){
-      streak++;
-      cursor.setDate(cursor.getDate() - 7);
-    } else break;
-  }
-  return streak;
 }
 
 /* ============================================================
@@ -1601,19 +1564,6 @@ function lastLoggedSetsFor(exerciseName){
   return null;
 }
 
-function bestSetFor(exerciseName){
-  // heaviest weight ever logged for this exercise
-  let best = null;
-  for(const w of workouts){
-    const match = w.exercises.find(e => e.name === exerciseName);
-    if(!match) continue;
-    for(const s of match.sets){
-      if(!best || s.weight > best.weight) best = s;
-    }
-  }
-  return best;
-}
-
 function startSession(routineId){
   const r = routines.find(x => x.id === routineId);
   if(!r) return;
@@ -1846,21 +1796,6 @@ function showAlertModal(message){
 }
 function closeAlertModal(){
   document.getElementById('alertModal').classList.remove('active');
-}
-
-function countPRsInWorkout(workout){
-  let count = 0;
-  const priorWorkouts = workouts.filter(w => w.date < workout.date || (w.date === workout.date && w.id !== workout.id));
-  for(const ex of workout.exercises){
-    let priorMax = 0;
-    for(const w of priorWorkouts){
-      const match = w.exercises.find(e => e.name === ex.name);
-      if(match) for(const s of match.sets) priorMax = Math.max(priorMax, s.weight);
-    }
-    const thisMax = Math.max(0, ...ex.sets.map(s => s.weight));
-    if(thisMax > priorMax && thisMax > 0) count++;
-  }
-  return count;
 }
 
 /* ============================================================
