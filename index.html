@@ -62,6 +62,13 @@
     text-transform:uppercase;
     letter-spacing:0.08em;
   }
+  .app-version{
+    font-family:'JetBrains Mono',monospace;
+    font-size:9px;
+    color:var(--text-faint);
+    opacity:0.6;
+    margin-top:2px;
+  }
 
   main{
     flex:1;
@@ -400,7 +407,10 @@
 
   <header class="topbar">
     <div class="brand">LOAD<span>OUT</span></div>
-    <div class="today" id="todayLabel"></div>
+    <div style="text-align:right;">
+      <div class="today" id="todayLabel"></div>
+      <div class="app-version" id="appVersionLabel"></div>
+    </div>
   </header>
 
   <main>
@@ -685,6 +695,11 @@ const DEFAULT_SCHEDULE = {
 // Bump this when the built-in routine/schedule defaults change, so
 // existing saved data gets refreshed to match the latest training plan.
 const LIBRARY_VERSION = 'v7-restore-sep-transition';
+
+// Shown in the header so you can confirm both phones are on the same
+// build after re-uploading a new index.html. Bump on any real update —
+// this is purely cosmetic and never triggers a data migration.
+const APP_VERSION = 'v1.9';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -1263,7 +1278,7 @@ function renderDayDetail(iso){
     const totalSets = loggedWorkout.exercises.reduce((a,e)=>a+e.sets.length,0);
     body = `
       <div class="hero-sub">✓ Logged · ${loggedWorkout.exercises.length} exercises · ${totalSets} sets</div>
-      <button class="btn btn-ghost" onclick="startSession('${routine.id}')">Log Again</button>
+      <button class="btn btn-ghost" onclick="startSessionForDate('${routine.id}','${iso}')">Log Again</button>
     `;
   } else {
     body = `
@@ -1492,13 +1507,11 @@ function renderRoutineExList(){
       <div class="field-row">
         <div class="field" style="margin-bottom:0;">
           <label class="field-label">Sets</label>
-          <input type="text" inputmode="numeric" value="${ex.sets}"
-            onchange="updateEditorExercise(${i},'sets',this.value)" />
+          <input type="text" inputmode="numeric" value="${ex.sets}" class="ex-sets-input" />
         </div>
         <div class="field" style="margin-bottom:0;">
           <label class="field-label">Reps</label>
-          <input type="text" value="${ex.reps}"
-            onchange="updateEditorExercise(${i},'reps',this.value)" />
+          <input type="text" value="${ex.reps}" class="ex-reps-input" />
         </div>
       </div>
       ${notesFieldHTML(ex.name)}
@@ -1506,16 +1519,29 @@ function renderRoutineExList(){
   `).join('');
 }
 
-function updateEditorExercise(i, field, value){
-  if(field === 'sets'){
-    const n = parseInt(value);
-    editingRoutineExercises[i].sets = (n && n > 0) ? n : editingRoutineExercises[i].sets;
-  } else {
-    editingRoutineExercises[i].reps = value.trim() || editingRoutineExercises[i].reps;
-  }
+// Single source of truth: reads whatever is currently on screen for
+// every exercise row and writes it into editingRoutineExercises.
+// Called before add/remove/save so nothing typed can be lost — there's
+// no per-keystroke handler to race against, so there's nothing to lose.
+function syncEditorExercisesFromDOM(){
+  const rows = document.querySelectorAll('#routineExList .ex-row');
+  rows.forEach((row, i) => {
+    if(!editingRoutineExercises[i]) return;
+    const setsInput = row.querySelector('.ex-sets-input');
+    const repsInput = row.querySelector('.ex-reps-input');
+    if(setsInput){
+      const n = parseInt(setsInput.value);
+      editingRoutineExercises[i].sets = (n && n > 0) ? n : editingRoutineExercises[i].sets;
+    }
+    if(repsInput){
+      const r = repsInput.value.trim();
+      editingRoutineExercises[i].reps = r || editingRoutineExercises[i].reps;
+    }
+  });
 }
 
 function addExerciseToEditor(){
+  syncEditorExercisesFromDOM();
   const name = document.getElementById('newExName').value.trim();
   const sets = document.getElementById('newExSets').value.trim() || '3';
   const reps = document.getElementById('newExReps').value.trim() || '8-10';
@@ -1528,11 +1554,13 @@ function addExerciseToEditor(){
 }
 
 function removeExerciseFromEditor(i){
+  syncEditorExercisesFromDOM();
   editingRoutineExercises.splice(i, 1);
   renderRoutineExList();
 }
 
 async function saveRoutine(){
+  syncEditorExercisesFromDOM();
   const name = document.getElementById('routineNameInput').value.trim();
   if(!name){ showAlertModal('Give this routine a name.'); return; }
   if(editingRoutineExercises.length === 0){ showAlertModal('Add at least one exercise.'); return; }
@@ -1730,13 +1758,22 @@ async function saveWorkout(){
 
   if(exercises.length === 0){ showAlertModal('Log at least one set before saving.'); return; }
 
-  workouts.push({
-    id: uid(),
-    date,
-    routineId: activeSessionRoutine.id,
-    routineName: activeSessionRoutine.name,
-    exercises
-  });
+  // If this date + routine already has a saved workout (e.g. re-saving
+  // after "Log Again"), update it in place instead of stacking a
+  // duplicate entry — duplicates were why edited values never showed
+  // up as "last time" on the next visit.
+  const existing = workouts.find(w => w.date === date && w.routineId === activeSessionRoutine.id);
+  if(existing){
+    existing.exercises = exercises;
+  } else {
+    workouts.push({
+      id: uid(),
+      date,
+      routineId: activeSessionRoutine.id,
+      routineName: activeSessionRoutine.name,
+      exercises
+    });
+  }
   await persistWorkouts();
   calSelectedDate = date;
   showCompletionModal();
@@ -2002,6 +2039,7 @@ document.addEventListener('focusout', (e) => {
 
 async function init(){
   document.getElementById('todayLabel').textContent = new Date().toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+  document.getElementById('appVersionLabel').textContent = APP_VERSION;
   await loadData();
   calSelectedDate = todayISO();
   showView('calendar');
