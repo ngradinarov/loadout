@@ -547,6 +547,7 @@
       </div>
       <div id="logExerciseList"></div>
       <button class="btn btn-primary" onclick="saveWorkout()">Save Workout</button>
+      <p id="logVersionTag" style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-faint);margin-top:12px;"></p>
     </section>
 
     <!-- ============ PROGRESS ============ -->
@@ -706,7 +707,7 @@ const LIBRARY_VERSION = 'v7-restore-sep-transition';
 // Shown in the header so you can confirm both phones are on the same
 // build after re-uploading a new index.html. Bump on any real update —
 // this is purely cosmetic and never triggers a data migration.
-const APP_VERSION = 'v2.1';
+const APP_VERSION = 'v2.2';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -1588,6 +1589,7 @@ function startSession(routineId){
   });
 
   renderLogExercises();
+  document.getElementById('logVersionTag').textContent = 'Loadout ' + APP_VERSION;
   showView('log-session');
 }
 
