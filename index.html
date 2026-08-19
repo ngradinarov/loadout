@@ -702,12 +702,12 @@ const DEFAULT_SCHEDULE = {
 
 // Bump this when the built-in routine/schedule defaults change, so
 // existing saved data gets refreshed to match the latest training plan.
-const LIBRARY_VERSION = 'v7-restore-sep-transition';
+const LIBRARY_VERSION = 'v8-dedup-stable-routine-ids';
 
 // Shown in the header so you can confirm both phones are on the same
 // build after re-uploading a new index.html. Bump on any real update —
 // this is purely cosmetic and never triggers a data migration.
-const APP_VERSION = 'v2.2';
+const APP_VERSION = 'v2.3';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -926,8 +926,40 @@ async function loadData(){
 
   const needsMigration = storedVersion !== LIBRARY_VERSION;
 
+  // Collapse any duplicate workout entries sharing the same date + routine,
+  // keeping the LAST (most recently saved) one. Earlier versions matched
+  // existing workouts by routineId, which is regenerated on every defaults
+  // update — so re-saving a workout logged before an update created a second
+  // entry, and the stale older entry shadowed the newer one when pre-filling
+  // "last time" values. This repairs data already affected by that.
+  {
+    const seen = new Map(); // "date|routineName" -> index in deduped
+    const deduped = [];
+    workouts.forEach(w => {
+      const key = w.date + '|' + w.routineName;
+      if(seen.has(key)){
+        deduped[seen.get(key)] = w; // later entry wins
+      } else {
+        seen.set(key, deduped.length);
+        deduped.push(w);
+      }
+    });
+    if(deduped.length !== workouts.length){
+      workouts = deduped;
+      await persistWorkouts();
+    }
+  }
+
   if(routines.length === 0 || needsMigration){
-    routines = buildDefaultRoutines();
+    const rebuilt = buildDefaultRoutines();
+    // Preserve existing routine ids by name. Regenerating ids on every
+    // defaults update is what orphaned older workouts (their routineId no
+    // longer matched any routine), so keep ids stable across updates.
+    const idsByName = new Map(routines.map(r => [r.name, r.id]));
+    rebuilt.forEach(r => {
+      if(idsByName.has(r.name)) r.id = idsByName.get(r.name);
+    });
+    routines = rebuilt;
     await persistRoutines();
   }
   if(!schedule || needsMigration){
@@ -1556,13 +1588,19 @@ async function deleteRoutine(){
    LOG SESSION
    ============================================================ */
 function lastLoggedSetsFor(exerciseName){
-  // find most recent workout containing an exercise with this name, return its sets
-  const sorted = [...workouts].sort((a,b) => b.date.localeCompare(a.date));
-  for(const w of sorted){
-    const match = w.exercises.find(e => e.name === exerciseName);
-    if(match) return match.sets;
-  }
-  return null;
+  // Find the most recent workout containing this exercise.
+  // Sort by date descending; among entries sharing the same date, prefer the
+  // LAST one in the array (the most recently saved), so a fresh edit always
+  // wins over an older duplicate entry for that day.
+  const candidates = workouts
+    .map((w, idx) => ({w, idx}))
+    .filter(({w}) => w.exercises.some(e => e.name === exerciseName))
+    .sort((a, b) => {
+      const byDate = b.w.date.localeCompare(a.w.date);
+      return byDate !== 0 ? byDate : b.idx - a.idx;
+    });
+  if(candidates.length === 0) return null;
+  return candidates[0].w.exercises.find(e => e.name === exerciseName).sets;
 }
 
 function startSession(routineId){
@@ -1713,12 +1751,21 @@ async function saveWorkout(){
 
   if(exercises.length === 0){ showAlertModal('Log at least one set before saving.'); return; }
 
-  // If this date + routine already has a saved workout (e.g. re-saving
-  // after "Log Again"), update it in place instead of stacking a
-  // duplicate entry — duplicates were why edited values never showed
-  // up as "last time" on the next visit.
-  const existing = workouts.find(w => w.date === date && w.routineId === activeSessionRoutine.id);
+  // If this date + routine already has a saved workout (e.g. re-saving after
+  // "Log Again"), update it in place instead of stacking a duplicate entry.
+  // Match on routine NAME, not routineId: routine ids are regenerated whenever
+  // the built-in routine defaults are updated, so an id comparison would fail
+  // against workouts saved before an update and silently create a duplicate.
+  // Search from the end so the newest entry wins if duplicates already exist.
+  let existing = null;
+  for(let i = workouts.length - 1; i >= 0; i--){
+    if(workouts[i].date === date && workouts[i].routineName === activeSessionRoutine.name){
+      existing = workouts[i];
+      break;
+    }
+  }
   if(existing){
+    existing.routineId = activeSessionRoutine.id; // refresh any stale id
     existing.exercises = exercises;
   } else {
     workouts.push({
