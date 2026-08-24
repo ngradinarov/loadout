@@ -434,6 +434,7 @@
         <div class="cal-grid" id="calWeekdays"></div>
         <div class="cal-grid" id="calGrid" style="margin-top:5px;"></div>
       </div>
+      <div class="card" id="bodyWeightCard"></div>
       <div class="card" id="dayDetailCard" style="display:none;"></div>
       <button class="btn btn-ghost" onclick="showView('schedule-edit')">Edit Training Phases</button>
       <button class="btn btn-ghost" style="margin-top:10px;" onclick="exportWorkoutsCSV()">Export Workouts (CSV)</button>
@@ -612,6 +613,22 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="promptModal">
+    <div class="modal-card" style="text-align:left;">
+      <div class="modal-title" id="promptModalTitle" style="text-align:center;">Substitute Exercise</div>
+      <p class="modal-joke" id="promptModalMessage" style="text-align:center;"></p>
+      <div class="field">
+        <label class="field-label">Exercise name</label>
+        <input type="text" id="promptModalInput" list="promptModalDatalist" placeholder="Type or pick an exercise" />
+        <datalist id="promptModalDatalist"></datalist>
+      </div>
+      <div class="field-row" style="margin-bottom:0;">
+        <button class="btn btn-ghost" style="flex:1;" onclick="resolvePromptModal(null)">Cancel</button>
+        <button class="btn btn-primary" style="flex:1;" id="promptModalConfirmBtn" onclick="submitPromptModal()">Substitute</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -656,6 +673,7 @@ let workouts = [];   // {id, date, routineId, routineName, exercises:[{exerciseI
 let schedule = null;  // {phases: [{id,name,startDate,endDate|null,mode:'sequential'|'weekly',cycle:[...]}]}
 let dayOverrides = {}; // {isoDate: routineName|'Rest'} — manual per-day overrides of the computed schedule
 let exerciseNotes = {}; // {exerciseName: 'free text note'}
+let bodyWeights = {};   // {isoDate: number} — body weight log, in lb
 let editingRoutineId = null;
 let editingRoutineExercises = [];
 let activeSessionRoutine = null;
@@ -707,7 +725,7 @@ const LIBRARY_VERSION = 'v8-dedup-stable-routine-ids';
 // Shown in the header so you can confirm both phones are on the same
 // build after re-uploading a new index.html. Bump on any real update —
 // this is purely cosmetic and never triggers a data migration.
-const APP_VERSION = 'v2.3';
+const APP_VERSION = 'v2.7';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -757,6 +775,7 @@ const EXTRA_EXERCISE_GROUPS = {
   'Smith JM Press':'Triceps', 'Cable Tricep Kickback':'Triceps', 'Tricep Press Down':'Triceps',
   'Single Arm Tricep Kickback':'Triceps', 'Skull Crusher':'Triceps',
   'Dumbbell Shoulder Press':'Shoulders', 'Dual Delt Raise':'Shoulders', 'Cross-Body Cable Y Raise':'Shoulders',
+  'Machine Lateral Raise':'Shoulders',
   'Chest Supported Y Raise':'Shoulders', 'Tri-Delt Raise':'Shoulders', 'Single Arm Reverse Pec Dec':'Shoulders',
   'Reverse Pec Dec':'Shoulders', 'EZ Bar ROM Front Raise':'Shoulders',
   'Neutral Grip Lat Pulldown':'Back', 'Single Arm Cable Row':'Back', 'Wide Grip Row':'Back',
@@ -817,7 +836,7 @@ function buildDefaultRoutines(){
       ['Cable Tricep Kickback',3,'10-15'],
       ['Dumbbell Shoulder Press',3,'6-8'],
       ['Dual Delt Raise',3,'10/10'],
-      ['Cross-Body Cable Y Raise',3,'6-8'],
+      ['Machine Lateral Raise',3,'6-8'],
     ]),
     mk('Pull 1', [
       ['Neutral Grip Lat Pulldown',3,'6-8'],
@@ -917,6 +936,10 @@ async function loadData(){
     const o = await window.storage.get('day_overrides', false);
     dayOverrides = o ? JSON.parse(o.value) : {};
   }catch(e){ dayOverrides = {}; }
+  try{
+    const bw = await window.storage.get('body_weights', false);
+    bodyWeights = bw ? JSON.parse(bw.value) : {};
+  }catch(e){ bodyWeights = {}; }
 
   let storedVersion = null;
   try{
@@ -982,6 +1005,32 @@ async function loadData(){
     try{ await window.storage.set('library_version', LIBRARY_VERSION, false); }
     catch(e){ console.error('save library_version failed', e); }
   }
+
+  // Targeted one-time exercise renames. Kept separate from LIBRARY_VERSION on
+  // purpose: that flag rebuilds every routine from defaults, which would wipe
+  // any custom movements/sets/reps. These only rewrite the specific exercise
+  // named, leaving everything else exactly as-is. Past workout logs keep their
+  // original names so existing progress history stays intact.
+  const EXERCISE_RENAMES = [
+    {key: 'rename-crossbody-to-machine-lat-raise',
+     from: 'Cross-Body Cable Y Raise', to: 'Machine Lateral Raise'}
+  ];
+  for(const rn of EXERCISE_RENAMES){
+    let alreadyDone = false;
+    try{
+      const flag = await window.storage.get(rn.key, false);
+      alreadyDone = !!flag;
+    }catch(e){ alreadyDone = false; }
+    if(alreadyDone) continue;
+
+    let changed = false;
+    routines.forEach(r => r.exercises.forEach(ex => {
+      if(ex.name === rn.from){ ex.name = rn.to; changed = true; }
+    }));
+    if(changed) await persistRoutines();
+    try{ await window.storage.set(rn.key, 'done', false); }
+    catch(e){ console.error('save rename flag failed', e); }
+  }
 }
 
 async function persistRoutines(){
@@ -1034,6 +1083,10 @@ async function persistSchedule(){
 async function persistDayOverrides(){
   try{ await window.storage.set('day_overrides', JSON.stringify(dayOverrides), false); }
   catch(e){ console.error('save day overrides failed', e); }
+}
+async function persistBodyWeights(){
+  try{ await window.storage.set('body_weights', JSON.stringify(bodyWeights), false); }
+  catch(e){ console.error('save body weights failed', e); }
 }
 async function persistExerciseNotes(){
   try{ await window.storage.set('exercise_notes', JSON.stringify(exerciseNotes), false); }
@@ -1204,6 +1257,7 @@ function renderCalendar(){
     `;
   }).join('');
 
+  renderBodyWeightCard();
   if(calSelectedDate) renderDayDetail(calSelectedDate);
 }
 
@@ -1211,6 +1265,54 @@ function selectCalDay(iso){
   calSelectedDate = iso;
   dayDetailEditing = false;
   renderCalendar();
+}
+
+/* ---------- body weight ---------- */
+function renderBodyWeightCard(){
+  const iso = calSelectedDate || todayISO();
+  const current = bodyWeights[iso];
+  const isToday = iso === todayISO();
+
+  // most recent previous entry, for a bit of context
+  const priorDates = Object.keys(bodyWeights).filter(d => d < iso).sort();
+  const prior = priorDates.length ? priorDates[priorDates.length-1] : null;
+  let context = '';
+  if(prior){
+    const diff = current !== undefined ? (current - bodyWeights[prior]) : null;
+    context = `Last: ${bodyWeights[prior]} lb on ${fmtDate(prior)}` +
+      (diff !== null && !isNaN(diff) ? ` · ${diff >= 0 ? '+' : ''}${Math.round(diff*10)/10} lb` : '');
+  }
+
+  document.getElementById('bodyWeightCard').innerHTML = `
+    <p class="card-title">Body Weight — ${fmtDate(iso)}${isToday ? ' · Today' : ''}</p>
+    <div class="field-row" style="margin-bottom:0;align-items:flex-end;">
+      <div class="field" style="margin-bottom:0;flex:1;">
+        <input type="number" inputmode="decimal" step="0.1" min="0" placeholder="lb"
+          id="bodyWeightInput" value="${current !== undefined ? current : ''}" />
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="saveBodyWeight('${iso}')">Save</button>
+      ${current !== undefined ? `<button class="btn btn-ghost btn-sm" onclick="clearBodyWeight('${iso}')">Clear</button>` : ''}
+    </div>
+    ${context ? `<p style="font-size:11px;color:var(--text-faint);margin:8px 0 0;">${context}</p>` : ''}
+  `;
+}
+
+async function saveBodyWeight(iso){
+  const raw = document.getElementById('bodyWeightInput').value;
+  const val = parseFloat(raw);
+  if(raw === '' || isNaN(val) || val <= 0){
+    showAlertModal('Enter a valid body weight in lb.');
+    return;
+  }
+  bodyWeights[iso] = val;
+  await persistBodyWeights();
+  renderBodyWeightCard();
+}
+
+async function clearBodyWeight(iso){
+  delete bodyWeights[iso];
+  await persistBodyWeights();
+  renderBodyWeightCard();
 }
 
 function renderDayDetail(iso){
@@ -1277,7 +1379,7 @@ function renderDayDetail(iso){
     const totalSets = loggedWorkout.exercises.reduce((a,e)=>a+e.sets.length,0);
     body = `
       <div class="hero-sub">✓ Logged · ${loggedWorkout.exercises.length} exercises · ${totalSets} sets</div>
-      <button class="btn btn-ghost" onclick="startSessionForDate('${routine.id}','${iso}')">Log Again</button>
+      <button class="btn btn-ghost" onclick="startSessionForDate('${routine.id}','${iso}')">Edit Workout</button>
     `;
   } else {
     body = `
@@ -1320,8 +1422,7 @@ async function clearDayOverride(iso){
 }
 
 function startSessionForDate(routineId, iso){
-  startSession(routineId);
-  document.getElementById('logDate').value = iso;
+  startSession(routineId, iso);
 }
 
 /* ---------- training phases list ---------- */
@@ -1503,6 +1604,8 @@ function renderRoutineExList(){
         <div class="ex-name">${ex.name}</div>
         <button class="icon-btn" onclick="removeExerciseFromEditor(${i})">✕</button>
       </div>
+      <button class="chip" style="cursor:pointer;border:1px solid var(--border);margin-bottom:10px;"
+        onclick="changeMovementInRoutine(${i})">Change movement</button>
       <div class="field-row">
         <div class="field" style="margin-bottom:0;">
           <label class="field-label">Sets</label>
@@ -1516,6 +1619,23 @@ function renderRoutineExList(){
       ${notesFieldHTML(ex.name)}
     </div>
   `).join('');
+}
+
+// Permanently swap which movement this routine slot uses, keeping the
+// slot's sets/reps targets. Applies from now on (until changed again) —
+// unlike the per-session "Substitute" on the logging screen.
+async function changeMovementInRoutine(i){
+  syncEditorExercisesFromDOM(); // don't lose any sets/reps edits in progress
+  const ex = editingRoutineExercises[i];
+  const newName = await showPromptModal(
+    `Replacing "${ex.name}" in this routine. Its sets and reps stay the same, and past logs keep their original name.`,
+    ex.name,
+    'Change Movement',
+    'Change'
+  );
+  if(!newName || newName === ex.name) return;
+  editingRoutineExercises[i].name = newName;
+  renderRoutineExList();
 }
 
 // Single source of truth: reads whatever is currently on screen for
@@ -1603,28 +1723,52 @@ function lastLoggedSetsFor(exerciseName){
   return candidates[0].w.exercises.find(e => e.name === exerciseName).sets;
 }
 
-function startSession(routineId){
+function startSession(routineId, isoDate){
   const r = routines.find(x => x.id === routineId);
   if(!r) return;
   activeSessionRoutine = r;
   document.getElementById('logSessionTitle').textContent = r.name;
-  document.getElementById('logDate').value = todayISO();
+  const date = isoDate || todayISO();
+  document.getElementById('logDate').value = date;
 
-  activeSessionExercises = r.exercises.map(ex => {
-    const prev = lastLoggedSetsFor(ex.name);
-    const setCount = ex.sets || 3;
-    const sets = [];
-    for(let i = 0; i < setCount; i++){
-      if(prev && prev[i]){
-        sets.push({weight: prev[i].weight, reps: prev[i].reps, prefilled: true});
-      } else if(prev && prev.length > 0){
-        sets.push({weight: prev[prev.length-1].weight, reps: prev[prev.length-1].reps, prefilled: true});
-      } else {
-        sets.push({weight: '', reps: '', prefilled: false});
+  // If this day already has a saved workout for this routine, load THAT
+  // workout's actual exercises and numbers — so editing a past session
+  // (including substituting a movement) works on the real recorded data
+  // rather than resetting to the routine template.
+  let existing = null;
+  for(let i = workouts.length - 1; i >= 0; i--){
+    if(workouts[i].date === date && workouts[i].routineName === r.name){ existing = workouts[i]; break; }
+  }
+
+  if(existing){
+    activeSessionExercises = existing.exercises.map(ex => {
+      const slot = r.exercises.find(re => re.name === ex.name);
+      return {
+        exerciseId: slot ? slot.id : (ex.exerciseId || uid()),
+        name: ex.name,
+        targetReps: slot ? slot.reps : '—',
+        substitutedFrom: null,
+        // these are the values actually logged that day, not predictions
+        sets: ex.sets.map(s => ({weight: s.weight, reps: s.reps, prefilled: false}))
+      };
+    });
+  } else {
+    activeSessionExercises = r.exercises.map(ex => {
+      const prev = lastLoggedSetsFor(ex.name);
+      const setCount = ex.sets || 3;
+      const sets = [];
+      for(let i = 0; i < setCount; i++){
+        if(prev && prev[i]){
+          sets.push({weight: prev[i].weight, reps: prev[i].reps, prefilled: true});
+        } else if(prev && prev.length > 0){
+          sets.push({weight: prev[prev.length-1].weight, reps: prev[prev.length-1].reps, prefilled: true});
+        } else {
+          sets.push({weight: '', reps: '', prefilled: false});
+        }
       }
-    }
-    return {exerciseId: ex.id, name: ex.name, targetReps: ex.reps, sets};
-  });
+      return {exerciseId: ex.id, name: ex.name, targetReps: ex.reps, substitutedFrom: null, sets};
+    });
+  }
 
   renderLogExercises();
   document.getElementById('logVersionTag').textContent = 'Loadout ' + APP_VERSION;
@@ -1687,7 +1831,9 @@ function renderLogExercises(){
           <div>
             <div class="list-row-title">${ex.name}</div>
             <div class="list-row-sub">Target: ${ex.targetReps} reps</div>
+            ${ex.substitutedFrom ? `<div class="list-row-sub" style="color:var(--accent);">Subbed for ${ex.substitutedFrom} — this workout only</div>` : ''}
           </div>
+          <button class="chip" style="cursor:pointer;border:1px solid var(--border);" onclick="substituteExercise(${exIdx})">Substitute</button>
         </div>
         <div class="plates-wrap">${plateBarSVG(perSide)}</div>
         ${anyPrefilled ? '<p class="prefilled-hint"><span class="prefilled-swatch"></span>Orange = last time — edit to log today\'s numbers</p>' : ''}
@@ -1700,6 +1846,41 @@ function renderLogExercises(){
       </div>
     `;
   }).join('');
+}
+
+// Swap an exercise for a different movement, for THIS logged session only.
+// The routine definition is left untouched — next time you run this routine,
+// the original exercise comes back.
+async function substituteExercise(exIdx){
+  const ex = activeSessionExercises[exIdx];
+  const original = ex.substitutedFrom || ex.name;
+  const newName = await showPromptModal(
+    `Replacing "${ex.name}" for this workout only — your saved routine won't change.`,
+    ex.name,
+    'Substitute Exercise'
+  );
+  if(!newName || newName === ex.name) return;
+
+  ex.name = newName;
+  ex.substitutedFrom = (newName === original) ? null : original;
+
+  // Re-prefill from the substitute's own history: the previous exercise's
+  // weights don't carry over to a different movement.
+  const prev = lastLoggedSetsFor(newName);
+  const setCount = ex.sets.length;
+  const sets = [];
+  for(let i = 0; i < setCount; i++){
+    if(prev && prev[i]){
+      sets.push({weight: prev[i].weight, reps: prev[i].reps, prefilled: true});
+    } else if(prev && prev.length > 0){
+      const last = prev[prev.length - 1];
+      sets.push({weight: last.weight, reps: last.reps, prefilled: true});
+    } else {
+      sets.push({weight: '', reps: '', prefilled: false});
+    }
+  }
+  ex.sets = sets;
+  renderLogExercises();
 }
 
 function updateSet(exIdx, setIdx, field, value, inputEl){
@@ -1847,6 +2028,34 @@ function closeAlertModal(){
   document.getElementById('alertModal').classList.remove('active');
 }
 
+let promptModalResolver = null;
+function showPromptModal(message, defaultValue, title, confirmLabel){
+  return new Promise((resolve) => {
+    promptModalResolver = resolve;
+    document.getElementById('promptModalTitle').textContent = title || 'Substitute Exercise';
+    document.getElementById('promptModalMessage').textContent = message || '';
+    document.getElementById('promptModalConfirmBtn').textContent = confirmLabel || 'Substitute';
+    const input = document.getElementById('promptModalInput');
+    input.value = defaultValue || '';
+    // offer the full exercise library as autocomplete suggestions
+    const names = new Set();
+    Object.values(EXERCISE_LIBRARY).forEach(list => list.forEach(n => names.add(n)));
+    routines.forEach(r => r.exercises.forEach(e => names.add(e.name)));
+    document.getElementById('promptModalDatalist').innerHTML =
+      [...names].sort().map(n => `<option value="${escapeHTML(n)}"></option>`).join('');
+    document.getElementById('promptModal').classList.add('active');
+  });
+}
+function submitPromptModal(){
+  const value = document.getElementById('promptModalInput').value.trim();
+  resolvePromptModal(value || null);
+}
+function resolvePromptModal(result){
+  document.getElementById('promptModal').classList.remove('active');
+  if(promptModalResolver) promptModalResolver(result);
+  promptModalResolver = null;
+}
+
 /* ============================================================
    PROGRESS
    ============================================================ */
@@ -1864,15 +2073,17 @@ function fmtDateShort(iso){
 
 function buildGroupedExerciseOptions(){
   const names = allExerciseNames();
-  if(names.length === 0) return null;
   const byGroup = {};
   names.forEach(n => {
     const g = groupForExercise(n);
     (byGroup[g] = byGroup[g] || []).push(n);
   });
   const orderedGroups = MUSCLE_GROUP_ORDER.filter(g => byGroup[g] && byGroup[g].length);
-  if(orderedGroups.length === 0) return null;
-  return orderedGroups.map(g => `<option value="group:${g}">${g}</option>`).join('');
+  const bodyWeightOption = '<option value="bodyweight">Body Weight</option>';
+  if(orderedGroups.length === 0){
+    return Object.keys(bodyWeights).length ? bodyWeightOption : null;
+  }
+  return bodyWeightOption + orderedGroups.map(g => `<option value="group:${g}">${g}</option>`).join('');
 }
 
 function renderProgressView(){
@@ -1905,7 +2116,8 @@ function computeExercisePoints(name){
   return points;
 }
 
-function buildChartSVGMarkup(points, gradId){
+function buildChartSVGMarkup(points, gradId, markPRs){
+  const showPRs = markPRs !== false;
   const w = 320, h = 178;
   const padL = 34, padR = 10, padT = 12, padB = 22;
   const plotW = w - padL - padR;
@@ -1923,7 +2135,7 @@ function buildChartSVGMarkup(points, gradId){
 
   let priorMax = -Infinity;
   const dots = coords.map(c => {
-    const isPR = c.weight > priorMax;
+    const isPR = showPRs && c.weight > priorMax;
     if(c.weight > priorMax) priorMax = c.weight;
     return `<circle cx="${c.x}" cy="${c.y}" r="${isPR?4.2:2.8}" fill="${isPR?'#4ADE80':'#FF6A2B'}" stroke="${isPR?'#14171A':'none'}" stroke-width="1.3"/>`;
   }).join('');
@@ -1997,10 +2209,49 @@ function renderExerciseCardHTML(name){
   `;
 }
 
+function renderBodyWeightCardHTML(){
+  const dates = Object.keys(bodyWeights).sort();
+  if(dates.length === 0){
+    return `
+      <div class="empty">
+        <div class="empty-icon">◐</div>
+        <div class="empty-title">No body weight logged yet</div>
+        <div class="empty-sub">Add an entry from the Calendar tab to start tracking it here.</div>
+      </div>
+    `;
+  }
+  const points = dates.map(d => ({date: d, weight: bodyWeights[d], routine: 'Body weight'}));
+  const delta = Math.round((points[points.length-1].weight - points[0].weight) * 10) / 10;
+  const chartSVG = buildChartSVGMarkup(points, 'grad-' + uid(), false);
+
+  const rows = [...points].reverse().slice(0, 10).map(p => `
+    <div class="list-row">
+      <div>
+        <div class="list-row-title mono">${p.weight} lb</div>
+        <div class="list-row-sub">${fmtDate(p.date)}</div>
+      </div>
+    </div>
+  `).join('');
+
+  return `
+    <div class="card">
+      <p class="card-title">Body Weight</p>
+      <p style="font-size:12px;color:var(--text-dim);margin:-6px 0 10px;">${points.length} entr${points.length===1?'y':'ies'} · ${delta>=0?'+':''}${delta} lb since first</p>
+      <div class="chart-wrap">${chartSVG}</div>
+      <div class="section-gap">${rows}</div>
+    </div>
+  `;
+}
+
 function renderProgressResults(){
   const val = document.getElementById('progressExerciseSelect').value;
   const container = document.getElementById('progressResults');
   if(!val){ container.innerHTML = ''; return; }
+
+  if(val === 'bodyweight'){
+    container.innerHTML = renderBodyWeightCardHTML();
+    return;
+  }
 
   const groupName = val.slice(6); // strip "group:" prefix
   const namesInGroup = allExerciseNames().filter(n => groupForExercise(n) === groupName).sort();
