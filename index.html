@@ -682,7 +682,7 @@ let routines = [];   // {id, name, exercises:[{id,name,sets,reps}]}
 let workouts = [];   // {id, date, routineId, routineName, exercises:[{exerciseId,name,sets:[{weight,reps}]}]}
 let schedule = null;  // {phases: [{id,name,startDate,endDate|null,mode:'sequential'|'weekly',cycle:[...]}]}
 let dayOverrides = {}; // {isoDate: routineName|'Rest'} — manual per-day overrides of the computed schedule
-let exerciseNotes = {}; // {exerciseName: 'free text note'}
+let exerciseNotes = {}; // {"isoDate|routineName|exerciseName": 'free text note'} — notes are per-session
 let bodyWeights = {};   // {isoDate: number} — body weight log, in lb
 let editingRoutineId = null;
 let editingRoutineExercises = [];
@@ -735,7 +735,7 @@ const LIBRARY_VERSION = 'v8-dedup-stable-routine-ids';
 // Shown in the header so you can confirm both phones are on the same
 // build after re-uploading a new index.html. Bump on any real update —
 // this is purely cosmetic and never triggers a data migration.
-const APP_VERSION = 'v2.9';
+const APP_VERSION = 'v3.0';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -1017,6 +1017,28 @@ async function loadData(){
     catch(e){ console.error('save library_version failed', e); }
   }
 
+  // Notes used to be keyed by exercise name alone, so one note showed up on
+  // every session of that exercise. They're now keyed date|routine|exercise.
+  // Move each legacy note onto the most recent workout that used it, so
+  // nothing written previously is lost.
+  {
+    let migratedAny = false;
+    Object.keys(exerciseNotes).forEach(k => {
+      if(k.includes('|')) return; // already migrated
+      const text = exerciseNotes[k];
+      delete exerciseNotes[k];
+      migratedAny = true;
+      if(!text) return;
+      let best = null;
+      workouts.forEach(w => {
+        if(!w.exercises.some(e => e.name === k)) return;
+        if(!best || w.date > best.date) best = w;
+      });
+      if(best) exerciseNotes[best.date + '|' + best.routineName + '|' + k] = text;
+    });
+    if(migratedAny) await persistExerciseNotes();
+  }
+
   // Targeted one-time exercise renames. Kept separate from LIBRARY_VERSION on
   // purpose: that flag rebuilds every routine from defaults, which would wipe
   // any custom movements/sets/reps. These only rewrite the specific exercise
@@ -1108,19 +1130,29 @@ async function persistExerciseNotes(){
   try{ await window.storage.set('exercise_notes', JSON.stringify(exerciseNotes), false); }
   catch(e){ console.error('save exercise notes failed', e); }
 }
-async function saveExerciseNote(name, value){
-  exerciseNotes[name] = value;
+async function saveExerciseNote(key, value){
+  if(value === ''){ delete exerciseNotes[key]; }
+  else { exerciseNotes[key] = value; }
   await persistExerciseNotes();
 }
 function escapeHTML(str){
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+// Notes belong to one specific session, not to the exercise in general —
+// a note written on Aug 26's Push 1 should not appear on Sept 3's Push 1.
+function noteKeyFor(exerciseName){
+  const dateEl = document.getElementById('logDate');
+  const date = (dateEl && dateEl.value) || todayISO();
+  const routineName = activeSessionRoutine ? activeSessionRoutine.name : '';
+  return date + '|' + routineName + '|' + exerciseName;
+}
 function notesFieldHTML(name){
-  const val = exerciseNotes[name] || '';
+  const key = noteKeyFor(name);
+  const val = exerciseNotes[key] || '';
   return `
     <div class="field" style="margin-top:10px;margin-bottom:0;">
       <label class="field-label">Notes</label>
-      <textarea class="notes-textarea exercise-note-input" data-exname="${escapeHTML(name)}" rows="2"
+      <textarea class="notes-textarea exercise-note-input" data-notekey="${escapeHTML(key)}" rows="2"
         placeholder="Form cues, how it felt, anything to remember…">${escapeHTML(val)}</textarea>
     </div>
   `;
@@ -2285,8 +2317,8 @@ function renderProgressResults(){
    ============================================================ */
 document.addEventListener('focusout', (e) => {
   if(e.target && e.target.classList && e.target.classList.contains('exercise-note-input')){
-    const name = e.target.getAttribute('data-exname');
-    if(name) saveExerciseNote(name, e.target.value);
+    const key = e.target.getAttribute('data-notekey');
+    if(key) saveExerciseNote(key, e.target.value);
   }
 });
 
