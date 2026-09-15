@@ -390,8 +390,16 @@
     align-items:center;justify-content:center;gap:3px;cursor:pointer;
     position:relative;padding:2px;min-width:0;width:100%;
   }
-  .cal-cell.today{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);}
-  .cal-cell.selected{background:var(--surface-raised);}
+  /* Today gets a quiet dashed outline; the selected day gets the strong
+     orange focus ring, since that's what the user just acted on. */
+  .cal-cell.today{border-color:var(--text-faint);border-style:dashed;}
+  .cal-cell.selected{
+    background:var(--surface-raised);
+    border-color:var(--accent);
+    box-shadow:0 0 0 2px var(--accent);
+    z-index:1;
+  }
+  .cal-cell.selected .cal-daynum{color:var(--text);font-weight:700;}
   .cal-cell.other-month{opacity:0.28;}
   .cal-daynum{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);}
   .cal-tag{
@@ -448,6 +456,9 @@
       <div class="card" id="dayDetailCard" style="display:none;"></div>
       <button class="btn btn-ghost" onclick="showView('schedule-edit')">Edit Training Phases</button>
       <button class="btn btn-ghost" style="margin-top:10px;" onclick="exportWorkoutsCSV()">Export Workouts (CSV)</button>
+      <button class="btn btn-ghost" style="margin-top:10px;" onclick="exportBackup()">Back Up All Data</button>
+      <button class="btn btn-ghost" style="margin-top:10px;" onclick="document.getElementById('restoreFileInput').click()">Restore From Backup</button>
+      <input type="file" id="restoreFileInput" accept=".json,application/json" style="display:none;" onchange="importBackup(this)" />
     </section>
 
     <!-- ============ TRAINING PHASES LIST ============ -->
@@ -557,7 +568,8 @@
         </div>
       </div>
       <div id="logExerciseList"></div>
-      <button class="btn btn-primary" onclick="saveWorkout()">Save Workout</button>
+      <p id="autosaveStatus" style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--good);margin:0 0 10px;opacity:0;transition:opacity .2s;"></p>
+      <button class="btn btn-primary" onclick="saveWorkout()">Finish Workout</button>
       <p id="logVersionTag" style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-faint);margin-top:12px;"></p>
     </section>
 
@@ -708,22 +720,11 @@ const DEFAULT_SCHEDULE = {
       cycle: ['Push 1','Pull 1','Legs 1','Rest','Push 2','Pull 2','Legs 2','Rest']
     },
     {
-      id: 'phase-transition', name: 'Rest Days',
-      startDate: '2026-09-15', endDate: '2026-09-16',
+      id: 'phase-arnold', name: 'Arnold Split',
+      startDate: '2026-09-15', endDate: '2026-12-08',
       mode: 'sequential',
-      cycle: ['Rest']
-    },
-    {
-      id: 'phase-cut', name: 'Initial Cut',
-      startDate: '2026-09-17', endDate: '2026-11-24',
-      mode: 'sequential',
-      cycle: ['Upper 1','Lower 1','Arms/Shoulders','Rest','Upper 2','Lower 2','Rest']
-    },
-    {
-      id: 'phase-refeed', name: 'Refeed Week',
-      startDate: '2026-11-25', endDate: '2026-12-01',
-      mode: 'sequential',
-      cycle: ['Push 1','Pull 1','Legs 1','Push 2','Pull 2','Legs 2']
+      cycle: ['Chest/Back 1','Arms/Shoulders 1','Legs A','Rest',
+              'Chest/Back 2','Arms/Shoulders 2','Legs B','Rest']
     }
   ]
 };
@@ -735,7 +736,7 @@ const LIBRARY_VERSION = 'v8-dedup-stable-routine-ids';
 // Shown in the header so you can confirm both phones are on the same
 // build after re-uploading a new index.html. Bump on any real update —
 // this is purely cosmetic and never triggers a data migration.
-const APP_VERSION = 'v3.0';
+const APP_VERSION = 'v3.4';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -751,6 +752,7 @@ const EXERCISE_LIBRARY = {
   'Quads': ['Back Squat','Front Squat','Leg Press','Walking Lunge','Leg Extension','Bulgarian Split Squat'],
   'Hamstrings & Glutes': ['Romanian Deadlift','Leg Curl','Good Morning','Hip Thrust','Glute Bridge','Sumo Deadlift'],
   'Calves': ['Standing Calf Raise','Seated Calf Raise'],
+  'Adductors': ['Adductor Machine'],
   'Core': ['Plank','Hanging Leg Raise','Cable Crunch','Ab Wheel Rollout','Russian Twist'],
 };
 
@@ -795,6 +797,10 @@ const EXTRA_EXERCISE_GROUPS = {
   'Overhand-Underhand EZ Bar Preacher Curl':'Biceps',
   'Pendulum Squat':'Quads', 'Hack Squat':'Quads',
   'Hamstring Curl':'Hamstrings & Glutes', 'RDL':'Hamstrings & Glutes',
+  // Arnold split additions
+  'Cable T-Bar Row':'Back', 'Close Grip Lat Pulldown':'Back',
+  'Incline Dumbbell Bench Press':'Chest', 'Low to High Cable Fly':'Chest',
+  'Adductor Machine':'Adductors',
 };
 
 // Keyword fallback for anything typed freehand that isn't in either map above.
@@ -923,6 +929,58 @@ function buildDefaultRoutines(){
       ['Hamstring Curl',2,'8-10'],
       ['Standing Calf Raise',3,'12'],
     ]),
+    // ---- Arnold split (Sep 15 – Dec 8) ----
+    mk('Chest/Back 1', [
+      ['Incline Smith Bench Press',4,'4-6'],
+      ['Pec Dec',2,'5-8'],
+      ['Neutral Grip Lat Pulldown',3,'6-8'],
+      ['Single Arm Cable Row',3,'6-10'],
+      ['Cable T-Bar Row',3,'5-8'],
+      ['Reverse Pec Dec',3,'6-8'],
+    ]),
+    mk('Arms/Shoulders 1', [
+      ['Dumbbell Preacher Curl',3,'6-8'],
+      ['Face Away Cable Curl',4,'6-8'],
+      ['Smith JM Press',4,'6-8'],
+      ['Single Arm Tricep Kickback',3,'10-15'],
+      ['Machine Lateral Raise',3,'6-8'],
+      ['Dual Delt Raise',3,'10/10'],
+      ['EZ Bar ROM Front Raise',3,'10-12'],
+    ]),
+    // Both Arnold leg days are the same session, per the program.
+    mk('Legs A', [
+      ['Pendulum Squat',3,'4-6'],
+      ['Leg Extension',3,'6-8'],
+      ['Hamstring Curl',3,'6-8'],
+      ['RDL',3,'8-10'],
+      ['Standing Calf Raise',3,'12'],
+      ['Adductor Machine',3,'10-12'],
+    ]),
+    mk('Chest/Back 2', [
+      ['Chest Supported Dumbbell Lat Row',3,'6-8'],
+      ['Close Grip Lat Pulldown',4,'6-10'],
+      ['Wide Grip Row',3,'5-8'],
+      ['Reverse Pec Dec',3,'6-8'],
+      ['Incline Dumbbell Bench Press',3,'6-8'],
+      ['Low to High Cable Fly',3,'8-10'],
+    ]),
+    mk('Arms/Shoulders 2', [
+      ['Dumbbell Preacher Hammer Curl',3,'6-8'],
+      ['Face Away Cable Curl',4,'6-8'],
+      ['Tricep Pushdown',3,'6-8'],
+      ['Overhead Tricep Extension',4,'8-10'],
+      ['Chest Supported Y Raise',3,'8-10'],
+      ['Dual Delt Raise',3,'10/10'],
+      ['Dumbbell Shoulder Press',3,'6-8'],
+    ]),
+    mk('Legs B', [
+      ['Pendulum Squat',3,'4-6'],
+      ['Leg Extension',3,'6-8'],
+      ['Hamstring Curl',3,'6-8'],
+      ['RDL',3,'8-10'],
+      ['Standing Calf Raise',3,'12'],
+      ['Adductor Machine',3,'10-12'],
+    ]),
   ];
 }
 
@@ -1039,6 +1097,51 @@ async function loadData(){
     if(migratedAny) await persistExerciseNotes();
   }
 
+  // One-time switch to the Arnold split (Sep 15 – Dec 8). Adds the six new
+  // routines if missing and replaces the old post-Sep-14 phases. Done as a
+  // targeted migration rather than a LIBRARY_VERSION bump so existing
+  // routines, custom movements, logged workouts and notes are left alone.
+  {
+    let arnoldDone = false;
+    try{
+      const flag = await window.storage.get('migrate-arnold-split', false);
+      arnoldDone = !!flag;
+    }catch(e){ arnoldDone = false; }
+
+    if(!arnoldDone){
+      const existingNames = new Set(routines.map(r => r.name));
+      const arnoldNames = ['Chest/Back 1','Arms/Shoulders 1','Legs A',
+                           'Chest/Back 2','Arms/Shoulders 2','Legs B'];
+      const defaults = buildDefaultRoutines();
+      let added = false;
+      arnoldNames.forEach(n => {
+        if(!existingNames.has(n)){
+          const def = defaults.find(r => r.name === n);
+          if(def){ routines.push(def); added = true; }
+        }
+      });
+      if(added) await persistRoutines();
+
+      if(schedule && Array.isArray(schedule.phases)){
+        // drop the phases the Arnold block replaces, keep everything else
+        schedule.phases = schedule.phases.filter(p =>
+          !['phase-transition','phase-cut','phase-refeed','phase-arnold'].includes(p.id));
+        schedule.phases.push({
+          id: 'phase-arnold', name: 'Arnold Split',
+          startDate: '2026-09-15', endDate: '2026-12-08',
+          mode: 'sequential',
+          cycle: ['Chest/Back 1','Arms/Shoulders 1','Legs A','Rest',
+                  'Chest/Back 2','Arms/Shoulders 2','Legs B','Rest']
+        });
+        schedule.phases.sort((a,b) => a.startDate.localeCompare(b.startDate));
+        await persistSchedule();
+      }
+
+      try{ await window.storage.set('migrate-arnold-split', 'done', false); }
+      catch(e){ console.error('save arnold flag failed', e); }
+    }
+  }
+
   // Targeted one-time exercise renames. Kept separate from LIBRARY_VERSION on
   // purpose: that flag rebuilds every routine from defaults, which would wipe
   // any custom movements/sets/reps. These only rewrite the specific exercise
@@ -1112,6 +1215,77 @@ function exportWorkoutsCSV(){
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/* ---------- full backup / restore ----------
+   Covers every piece of stored state, so data can be moved between a
+   Safari tab and an installed home-screen app, or recovered if iOS
+   clears storage. */
+function downloadFile(text, filename, mime){
+  const blob = new Blob([text], {type: mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportBackup(){
+  const payload = {
+    format: 'loadout-backup',
+    version: 1,
+    appVersion: APP_VERSION,
+    exportedAt: new Date().toISOString(),
+    data: { routines, workouts, schedule, dayOverrides, exerciseNotes, bodyWeights }
+  };
+  downloadFile(JSON.stringify(payload, null, 2),
+    `loadout-backup-${todayISO()}.json`, 'application/json');
+}
+
+async function importBackup(inputEl){
+  const file = inputEl.files && inputEl.files[0];
+  inputEl.value = ''; // allow re-picking the same file later
+  if(!file) return;
+  let payload;
+  try{
+    payload = JSON.parse(await file.text());
+  }catch(e){
+    showAlertModal("Couldn't read that file — make sure it's a Loadout backup .json file.");
+    return;
+  }
+  if(!payload || payload.format !== 'loadout-backup' || !payload.data){
+    showAlertModal("That doesn't look like a Loadout backup file.");
+    return;
+  }
+  const d = payload.data;
+  const wCount = Array.isArray(d.workouts) ? d.workouts.length : 0;
+  const bwCount = d.bodyWeights ? Object.keys(d.bodyWeights).length : 0;
+  const ok = await showConfirmModal(
+    `This backup has ${wCount} logged workout${wCount===1?'':'s'} and ${bwCount} body weight entr${bwCount===1?'y':'ies'}. Restoring replaces everything currently in this app.`,
+    'Restore this backup?'
+  );
+  if(!ok) return;
+
+  if(Array.isArray(d.routines)) routines = d.routines;
+  if(Array.isArray(d.workouts)) workouts = d.workouts;
+  if(d.schedule) schedule = d.schedule;
+  if(d.dayOverrides) dayOverrides = d.dayOverrides;
+  if(d.exerciseNotes) exerciseNotes = d.exerciseNotes;
+  if(d.bodyWeights) bodyWeights = d.bodyWeights;
+
+  await persistRoutines();
+  await persistWorkouts();
+  await persistSchedule();
+  await persistDayOverrides();
+  await persistExerciseNotes();
+  await persistBodyWeights();
+
+  calSelectedDate = todayISO();
+  showView('calendar');
+  showAlertModal('Backup restored.');
 }
 
 async function persistSchedule(){
@@ -1928,6 +2102,7 @@ async function substituteExercise(exIdx){
   }
   ex.sets = sets;
   renderLogExercises();
+  scheduleAutosave();
 }
 
 function updateSet(exIdx, setIdx, field, value, inputEl){
@@ -1945,6 +2120,7 @@ function updateSet(exIdx, setIdx, field, value, inputEl){
   const cards = document.querySelectorAll('#logExerciseList .card');
   const wrap = cards[exIdx].querySelector('.plates-wrap');
   if(wrap) wrap.innerHTML = plateBarSVG(perSide);
+  scheduleAutosave();
 }
 
 function addSet(exIdx){
@@ -1952,15 +2128,17 @@ function addSet(exIdx){
   const last = sets[sets.length-1];
   sets.push({weight: last ? last.weight : '', reps: last ? last.reps : '', prefilled: false});
   renderLogExercises();
+  scheduleAutosave();
 }
 function removeSet(exIdx, setIdx){
   activeSessionExercises[exIdx].sets.splice(setIdx,1);
   renderLogExercises();
+  scheduleAutosave();
 }
 
-async function saveWorkout(){
-  const date = document.getElementById('logDate').value || todayISO();
-  const exercises = activeSessionExercises
+// Collect the current session into clean, saveable exercise records.
+function buildSessionExercises(){
+  return activeSessionExercises
     .map(ex => ({
       exerciseId: ex.exerciseId,
       name: ex.name,
@@ -1976,15 +2154,18 @@ async function saveWorkout(){
         })
     }))
     .filter(ex => ex.sets.length > 0);
+}
 
-  if(exercises.length === 0){ showAlertModal('Log at least one set before saving.'); return; }
+// Write the session to storage. Shared by autosave and the finish button.
+async function commitWorkout(exercises){
+  const date = document.getElementById('logDate').value || todayISO();
 
-  // If this date + routine already has a saved workout (e.g. re-saving after
-  // "Log Again"), update it in place instead of stacking a duplicate entry.
-  // Match on routine NAME, not routineId: routine ids are regenerated whenever
-  // the built-in routine defaults are updated, so an id comparison would fail
-  // against workouts saved before an update and silently create a duplicate.
-  // Search from the end so the newest entry wins if duplicates already exist.
+  // If this date + routine already has a saved workout, update it in place
+  // instead of stacking a duplicate entry. Match on routine NAME, not
+  // routineId: routine ids are regenerated whenever the built-in routine
+  // defaults are updated, so an id comparison would fail against workouts
+  // saved before an update and silently create a duplicate. Search from the
+  // end so the newest entry wins if duplicates already exist.
   let existing = null;
   for(let i = workouts.length - 1; i >= 0; i--){
     if(workouts[i].date === date && workouts[i].routineName === activeSessionRoutine.name){
@@ -2005,6 +2186,37 @@ async function saveWorkout(){
     });
   }
   await persistWorkouts();
+  return date;
+}
+
+// Autosave: runs as you log, keeps you on the screen. Silent no-op until
+// there's at least one complete set, so a half-typed row saves nothing.
+let autosaveTimer = null;
+function scheduleAutosave(){
+  if(autosaveTimer) clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(runAutosave, 600);
+}
+async function runAutosave(){
+  if(!activeSessionRoutine) return;
+  const exercises = buildSessionExercises();
+  if(exercises.length === 0) return;
+  await commitWorkout(exercises);
+  showAutosaveStatus();
+}
+function showAutosaveStatus(){
+  const el = document.getElementById('autosaveStatus');
+  if(!el) return;
+  const t = new Date().toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+  el.textContent = `✓ Saved ${t}`;
+  el.style.opacity = '1';
+}
+
+// Finish button: saves, celebrates, returns to the calendar.
+async function saveWorkout(){
+  if(autosaveTimer){ clearTimeout(autosaveTimer); autosaveTimer = null; }
+  const exercises = buildSessionExercises();
+  if(exercises.length === 0){ showAlertModal('Log at least one set before saving.'); return; }
+  const date = await commitWorkout(exercises);
   calSelectedDate = date;
   showCompletionModal();
 }
