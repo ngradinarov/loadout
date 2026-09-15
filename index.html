@@ -736,7 +736,7 @@ const LIBRARY_VERSION = 'v8-dedup-stable-routine-ids';
 // Shown in the header so you can confirm both phones are on the same
 // build after re-uploading a new index.html. Bump on any real update —
 // this is purely cosmetic and never triggers a data migration.
-const APP_VERSION = 'v3.4';
+const APP_VERSION = 'v3.5';
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -1139,6 +1139,41 @@ async function loadData(){
 
       try{ await window.storage.set('migrate-arnold-split', 'done', false); }
       catch(e){ console.error('save arnold flag failed', e); }
+    }
+
+    // Repair pass: if an Arnold routine exists but is missing exercises the
+    // program calls for (e.g. it was created by an earlier partial build, or
+    // the one-shot migration above already ran), append the missing ones.
+    // Only ever ADDS — never removes or reorders — so custom movements,
+    // substitutions and edited sets/reps are preserved.
+    {
+      let repairDone = false;
+      try{
+        const flag = await window.storage.get('repair-arnold-exercises-v1', false);
+        repairDone = !!flag;
+      }catch(e){ repairDone = false; }
+
+      if(!repairDone){
+        const defaults = buildDefaultRoutines();
+        const arnoldNames = ['Chest/Back 1','Arms/Shoulders 1','Legs A',
+                             'Chest/Back 2','Arms/Shoulders 2','Legs B'];
+        let repaired = false;
+        arnoldNames.forEach(n => {
+          const mine = routines.find(r => r.name === n);
+          const def = defaults.find(r => r.name === n);
+          if(!mine || !def) return;
+          const have = new Set(mine.exercises.map(e => e.name));
+          def.exercises.forEach(de => {
+            if(!have.has(de.name)){
+              mine.exercises.push({id: uid(), name: de.name, sets: de.sets, reps: de.reps});
+              repaired = true;
+            }
+          });
+        });
+        if(repaired) await persistRoutines();
+        try{ await window.storage.set('repair-arnold-exercises-v1', 'done', false); }
+        catch(e){ console.error('save repair flag failed', e); }
+      }
     }
   }
 
